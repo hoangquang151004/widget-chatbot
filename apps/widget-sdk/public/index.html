@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XenoAI Widget — Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 48px 40px;
+      max-width: 540px;
+      width: 92%;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background: #EEF2FF;
+      color: #4F46E5;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 20px;
+      letter-spacing: 0.05em;
+    }
+    h1 { font-size: 32px; font-weight: 900; color: #111827; margin-bottom: 12px; }
+    p  { color: #6B7280; line-height: 1.7; margin-bottom: 24px; }
+    .snippet {
+      background: #F3F4F6;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: left;
+      font-family: monospace;
+      font-size: 13px;
+      color: #374151;
+      margin-bottom: 24px;
+      border: 1px solid #E5E7EB;
+    }
+    .snippet span { color: #7C3AED; }
+    .tip { font-size: 13px; color: #9CA3AF; }
+    .arrow {
+      position: fixed;
+      bottom: 100px;
+      right: 90px;
+      font-size: 14px;
+      color: white;
+      background: rgba(0,0,0,0.6);
+      padding: 8px 14px;
+      border-radius: 8px;
+      pointer-events: none;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">🧪 DEMO MODE</div>
+    <h1>XenoAI Widget</h1>
+    <p>
+      Widget AI Chatbot nhúng được vào bất kỳ website nào.<br>
+      Click vào nút <strong>💬</strong> ở góc phải bên dưới để thử!
+    </p>
+    <div class="snippet">
+      <span>&lt;script</span> src="https://cdn.xenoai.com/widget.js"<br>
+      &nbsp;&nbsp;<span>data-public-key</span>="pk_live_..."<br>
+      &nbsp;&nbsp;<span>data-bot-name</span>="Trợ lý AI"<br>
+      &nbsp;&nbsp;<span>data-color</span>="#4F46E5"<span>&gt;</span><br>
+      <span>&lt;/script&gt;</span>
+    </div>
+    <p class="tip">Để kết nối với backend thật, thay <code>pk_live_TEST</code> bằng Public Key thật của bạn.</p>
+  </div>
+
+  <div class="arrow">👇 Click để chat!</div>
+
+  <!--
+    Widget embed:
+    - data-api-endpoint: URL backend API (mặc định: http://localhost:8001)
+    - data-stream: true = SSE streaming, false = POST thường
+  -->
+  <script
+    src="/widget.js"
+    data-public-key="pk_live_TEST_DEMO_KEY_0000000000000000"
+    data-api-endpoint="http://localhost:8001"
+    data-bot-name="XenoAI Demo Bot"
+    data-color="#4F46E5"
+    data-placeholder="Hỏi tôi bất cứ điều gì..."
+    data-stream="false"
+  ></script>
+</body>
+</html>

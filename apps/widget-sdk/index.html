@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Customer Website - Widget Test</title>
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        line-height: 1.5;
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 0 20px;
+        background-color: #f4f4f5;
+      }
+      .card {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      }
+      h1 {
+        color: #18181b;
+      }
+      p {
+        color: #52525b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Chào mừng tới trang web của chúng tôi</h1>
+      <p>Đây là một trang web mẫu để kiểm tra tính năng nhúng Chatbot AI.</p>
+      <p>Bạn sẽ thấy một nút bong bóng chat ở góc dưới bên phải màn hình.</p>
+    </div>
+
+    <!-- WIDGET SDK EMBED CODE -->
+    <!-- NOTE: Update data-public-key with your actual Stripe API key from .env -->
+    <script
+      src="./dist/widget.js"
+      data-public-key="YOUR_PUBLIC_KEY_HERE"
+      data-api-endpoint="http://localhost:8001"
+      data-bot-name="Trợ lý AI"
+      data-color="#2563eb"
+      data-placeholder="Tôi có thể giúp gì cho bạn?"
+      data-position="bottom-right"
+    ></script>
+  </body>
+</html>

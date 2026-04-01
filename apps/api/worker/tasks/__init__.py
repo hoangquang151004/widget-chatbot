@@ -1,0 +1,1 @@
+from .document_tasks import process_document_task
