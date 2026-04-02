@@ -36,12 +36,12 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if any(request.url.path.startswith(path) for path in self.SKIP_PATHS):
             return await call_next(request)
 
-        # 2. Extract API Key from Header
-        api_key = request.headers.get("X-API-Key")
+        # 2. Extract API Key from Header (Support both X-API-Key and X-Widget-Key)
+        api_key = request.headers.get("X-Widget-Key") or request.headers.get("X-API-Key")
         if not api_key:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Missing API Key (X-API-Key header)"}
+                content={"detail": "Missing API Key (X-Widget-Key or X-API-Key header)"}
             )
 
         # 3. Database Authenticate Tenant

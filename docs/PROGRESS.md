@@ -60,6 +60,7 @@ Tổng thể          [█████████░] ~85%
 
 ### Đã hoàn thành
 - [x] Shadow DOM Architecture + Vanilla JS
+- [x] **TASK-02: Verify & Fix API Connection**: Đồng bộ header `X-Widget-Key`, hỗ trợ `data-api-url`, fix SSE parsing và render trích dẫn.
 - [x] **TASK-08: Fix Entry Point**: Tự động parse config từ script tag (data-public-key).
 - [x] **TASK-09: Real Key Setup**: Kết nối đúng Tenant trong DB thật.
 - [x] Build pipeline (`dist/widget.js`) hoạt động ổn định.

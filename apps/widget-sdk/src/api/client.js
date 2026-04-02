@@ -17,7 +17,6 @@ async function fetchWithTimeout(url, options) {
 
 /**
  * W-007: Gửi tin nhắn thường (non-streaming).
- * Retry 1 lần nếu network error.
  */
 export async function sendMessage(config, query, sessionId) {
   const url = `${config.apiEndpoint}/api/v1/chat`;
@@ -25,8 +24,7 @@ export async function sendMessage(config, query, sessionId) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': config.publicKey,
-      'Origin': window.location.origin,
+      'X-Widget-Key': config.publicKey,
     },
     body: JSON.stringify({ query, session_id: sessionId }),
   };
@@ -50,8 +48,6 @@ export async function sendMessage(config, query, sessionId) {
 
 /**
  * W-008: SSE streaming via fetch + ReadableStream.
- * onChunk(text) được gọi mỗi khi nhận được text mới.
- * onDone(payload) được gọi khi stream kết thúc.
  */
 export async function streamMessage(config, query, sessionId, onChunk, onDone) {
   const url = `${config.apiEndpoint}/api/v1/chat/stream`;
@@ -64,8 +60,7 @@ export async function streamMessage(config, query, sessionId, onChunk, onDone) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': config.publicKey,
-        'Origin': window.location.origin,
+        'X-Widget-Key': config.publicKey,
         'Accept': 'text/event-stream',
       },
       body: JSON.stringify({ query, session_id: sessionId }),
@@ -91,7 +86,10 @@ export async function streamMessage(config, query, sessionId, onChunk, onDone) {
         if (!trimmed || !trimmed.startsWith('data: ')) continue;
         
         const raw = trimmed.slice(6).trim();
-        if (raw === '[DONE]') { onDone(fullText); return; }
+        if (raw === '[DONE]') { 
+          onDone(fullText); 
+          return; 
+        }
         
         try {
           const payload = JSON.parse(raw);

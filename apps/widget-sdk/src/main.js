@@ -15,10 +15,12 @@ import { Widget } from './widget.js';
     return;
   }
 
-  // W-002: Parse config từ data attributes
+  // W-002: Parse config từ data attributes (Support both data-api-url and data-api-endpoint)
+  const apiAttr = script.getAttribute('data-api-url') || script.getAttribute('data-api-endpoint') || 'http://localhost:8001';
+  
   const config = {
     publicKey:   script.getAttribute('data-public-key') || '',
-    apiEndpoint: (script.getAttribute('data-api-endpoint') || 'http://localhost:8001').replace(/\/$/, ''),
+    apiEndpoint: apiAttr.replace(/\/$/, ''),
     botName:     script.getAttribute('data-bot-name')     || 'AI Assistant',
     color:       script.getAttribute('data-color')        || '#2563eb',
     placeholder: script.getAttribute('data-placeholder')  || 'Nhập câu hỏi của bạn...',
@@ -41,7 +43,7 @@ import { Widget } from './widget.js';
     try {
       const response = await fetch(`${config.apiEndpoint}/api/v1/chat/config`, {
         headers: { 
-          'X-API-Key': config.publicKey,
+          'X-Widget-Key': config.publicKey,
           'Accept': 'application/json'
         }
       });

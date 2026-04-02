@@ -6,9 +6,23 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from typing import Optional, Union
 from core.config import settings
 
+from passlib.context import CryptContext
+
 class SecurityUtils:
     """Utilities for encryption, key validation and security."""
     
+    _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    @classmethod
+    def hash_password(cls, password: str) -> str:
+        """Hash a password using bcrypt."""
+        return cls._pwd_context.hash(password)
+
+    @classmethod
+    def verify_password(cls, plain_password: str, hashed_password: str) -> bool:
+        """Verify a password against a hash."""
+        return cls._pwd_context.verify(plain_password, hashed_password)
+
     @staticmethod
     def is_public_key(key: str) -> bool:
         """Checks if key starts with pk_live_."""

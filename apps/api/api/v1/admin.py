@@ -92,6 +92,8 @@ async def register_tenant(payload: RegisterTenantSchema):
         tenant = Tenant(
             name=payload.name,
             slug=slug,
+            email=payload.email,
+            password_hash=security_utils.hash_password(payload.password),
             public_key=public_key,
             secret_key=secret_key,
             allowed_origins=payload.allowed_origins or ["*"],
@@ -105,11 +107,41 @@ async def register_tenant(payload: RegisterTenantSchema):
         "message": "Tenant đã được tạo thành công.",
         "tenant_id": str(tenant.id),
         "name": tenant.name,
+        "email": tenant.email,
         "slug": tenant.slug,
         "public_key": tenant.public_key,
         "secret_key": tenant.secret_key,
         "allowed_origins": tenant.allowed_origins,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B-002b: POST /login — Đăng nhập bằng Email/Password
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/login")
+async def login(payload: LoginSchema):
+    """Đăng nhập bằng Email và Password, trả về Secret Key."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Tenant).filter(Tenant.email == payload.email)
+        )
+        tenant = result.scalars().first()
+
+        if not tenant or not tenant.password_hash:
+            raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không chính xác.")
+
+        if not security_utils.verify_password(payload.password, tenant.password_hash):
+            raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không chính xác.")
+
+        if not tenant.is_active:
+            raise HTTPException(status_code=403, detail="Tài khoản đã bị khóa.")
+
+        return {
+            "message": "Đăng nhập thành công.",
+            "secret_key": tenant.secret_key,
+            "tenant_name": tenant.name
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

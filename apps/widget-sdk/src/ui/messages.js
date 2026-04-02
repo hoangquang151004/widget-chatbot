@@ -93,6 +93,16 @@ function renderBarChart(data) {
   </div>`;
 }
 
+function renderCitations(citations) {
+  if (!citations || citations.length === 0) return '';
+  const links = citations.map((c, i) => {
+    const title = c.metadata?.title || c.source || `Nguồn ${i + 1}`;
+    const url = c.metadata?.url || '#';
+    return `<a href="${url}" class="w-citation" target="_blank" title="${title}">[${i + 1}]</a>`;
+  }).join(' ');
+  return `<div class="w-component w-citations-wrap"><span class="w-citations-label">Tham khảo:</span> ${links}</div>`;
+}
+
 function renderComponent(component) {
   if (!component) return '';
   switch (component.type) {

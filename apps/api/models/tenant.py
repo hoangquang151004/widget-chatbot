@@ -17,6 +17,10 @@ class Tenant(Base):
     public_key = Column(String(100), unique=True, index=True, nullable=False) # pk_live_...
     secret_key = Column(String(100), unique=True, index=True, nullable=False) # sk_live_...
     
+    # Credentials (added for traditional login)
+    email = Column(String(255), unique=True, index=True, nullable=True) # nullable for now to avoid migration issues with existing data
+    password_hash = Column(String(255), nullable=True)
+    
     # Allowed Domains (JSON list)
     allowed_origins = Column(JSON, default=[])
 

@@ -1,15 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Customer Website - Widget Test</title>
+    <title>Customer Website - Widget SDK Test</title>
     <style>
       body {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
+        font-family: system-ui, -apple-system, sans-serif;
         line-height: 1.5;
         max-width: 800px;
         margin: 40px auto;
@@ -20,14 +17,10 @@
         background: white;
         padding: 2rem;
         border-radius: 12px;
-        shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
       }
-      h1 {
-        color: #18181b;
-      }
-      p {
-        color: #52525b;
-      }
+      h1 { color: #18181b; }
+      p { color: #52525b; }
     </style>
   </head>
   <body>
@@ -38,14 +31,13 @@
     </div>
 
     <!-- WIDGET SDK EMBED CODE -->
-    <!-- NOTE: Update data-public-key with your actual Stripe API key from .env -->
     <script
       src="./dist/widget.js"
-      data-public-key="YOUR_PUBLIC_KEY_HERE"
-      data-api-endpoint="http://localhost:8001"
-      data-bot-name="Trợ lý AI"
-      data-color="#2563eb"
-      data-placeholder="Tôi có thể giúp gì cho bạn?"
+      data-public-key="pk_live_antigravity_demo_key"
+      data-api-url="http://localhost:8001"
+      data-bot-name="Test Bot"
+      data-color="#3525cd"
+      data-placeholder="Hỏi tôi bất cứ điều gì..."
       data-position="bottom-right"
     ></script>
   </body>

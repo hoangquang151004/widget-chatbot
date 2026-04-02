@@ -80,7 +80,7 @@ async def get_widget_config(request: Request):
     Lấy cấu hình giao diện widget dựa trên Public Key.
     Endpoint này công khai cho Widget SDK.
     """
-    api_key = request.headers.get("X-API-Key")
+    api_key = request.headers.get("X-Widget-Key") or request.headers.get("X-API-Key")
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API Key")
 

@@ -4,7 +4,7 @@ import json
 def test_chat():
     url = "http://localhost:8001/api/v1/chat"
     headers = {
-        "X-API-Key": "pk_live_CXal62yBz9N5WCVYIvEt3fe7rE4Js4VT-Gsg38zjhAg",
+        "X-Widget-Key": "pk_live_antigravity_demo_key",
         "Content-Type": "application/json"
     }
     payload = {
