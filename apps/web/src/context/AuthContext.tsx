@@ -1,28 +1,36 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+"use client";
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 
 interface Tenant {
   id: string;
   name: string;
+  email: string;
   slug: string;
   public_key: string;
-  secret_key: string;
   widget_color?: string;
   widget_placeholder?: string;
 }
 
 interface AuthContextType {
-  secretKey: string | null;
+  accessToken: string | null;
   tenant: Tenant | null;
   isLoading: boolean;
-  login: (key: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [secretKey, setSecretKey] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -31,25 +39,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check storage on mount
   useEffect(() => {
-    const savedKey = localStorage.getItem("sk_key");
-    if (savedKey) {
-      verifyKey(savedKey);
+    const savedToken = localStorage.getItem("access_token");
+    if (savedToken) {
+      verifyToken(savedToken);
     } else {
       setIsLoading(false);
     }
   }, []);
 
-  const verifyKey = async (key: string) => {
+  const verifyToken = async (token: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/admin/me`, {
-        headers: { "X-API-Key": key },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.ok) {
         const data = await response.json();
-        setSecretKey(key);
+        setAccessToken(token);
         setTenant(data);
-        localStorage.setItem("sk_key", key);
+        localStorage.setItem("access_token", token);
         return true;
       } else {
         logout();
@@ -75,11 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const data = await response.json();
-        setSecretKey(data.secret_key);
-        localStorage.setItem("sk_key", data.secret_key);
-        
+        setAccessToken(data.access_token);
+        localStorage.setItem("access_token", data.access_token);
+
         // Verify to get full tenant info
-        await verifyKey(data.secret_key);
+        await verifyToken(data.access_token);
         router.push("/dashboard");
         return true;
       }
@@ -93,14 +101,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    setSecretKey(null);
+    setAccessToken(null);
     setTenant(null);
-    localStorage.removeItem("sk_key");
+    localStorage.removeItem("access_token");
     router.push("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ secretKey, tenant, isLoading, login, logout }}>
+    <AuthContext.Provider
+      value={{ accessToken, tenant, isLoading, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

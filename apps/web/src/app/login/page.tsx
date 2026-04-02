@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
@@ -52,9 +53,9 @@ export default function LoginPage() {
             <div className="mb-8">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-xl font-bold text-on-surface">Đăng nhập</h2>
-                <a className="text-sm font-semibold text-primary hover:underline underline-offset-4" href="#">
+                <Link className="text-sm font-semibold text-primary hover:underline underline-offset-4" href="/register">
                   Đăng ký ngay
-                </a>
+                </Link>
               </div>
               <p className="text-sm text-on-surface-variant">Vui lòng nhập thông tin của bạn</p>
             </div>

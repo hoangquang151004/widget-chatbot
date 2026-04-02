@@ -8,6 +8,7 @@ from db.session import async_session
 from models.tenant import Tenant
 from models.tenant_db_config import TenantDatabaseConfig
 from core.security import security_utils
+from core.config import settings
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 import re
@@ -22,6 +23,8 @@ router = APIRouter()
 class RegisterTenantSchema(BaseModel):
     name: str
     slug: str                              # e.g. "my-company"
+    email: EmailStr
+    password: str
     allowed_origins: Optional[List[str]] = ["*"]
 
 
@@ -44,6 +47,11 @@ class TenantUpdateSchema(BaseModel):
     widget_avatar_url: Optional[str] = None
     widget_font_size: Optional[str] = None
     widget_show_logo: Optional[bool] = None
+
+
+class LoginSchema(BaseModel):
+    email: EmailStr
+    password: str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,6 +94,15 @@ async def register_tenant(payload: RegisterTenantSchema):
         if existing.scalars().first():
             raise HTTPException(status_code=409, detail=f"Slug '{slug}' đã tồn tại.")
 
+        existing_email = await session.execute(
+            select(Tenant).filter(Tenant.email == payload.email)
+        )
+        if existing_email.scalars().first():
+            raise HTTPException(status_code=409, detail="Email đã được sử dụng.")
+
+        if len(payload.password) < 8:
+            raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 8 ký tự.")
+
         public_key = _generate_key("pk_live")
         secret_key = _generate_key("sk_live")
 
@@ -110,7 +127,6 @@ async def register_tenant(payload: RegisterTenantSchema):
         "email": tenant.email,
         "slug": tenant.slug,
         "public_key": tenant.public_key,
-        "secret_key": tenant.secret_key,
         "allowed_origins": tenant.allowed_origins,
     }
 
@@ -121,7 +137,7 @@ async def register_tenant(payload: RegisterTenantSchema):
 
 @router.post("/login")
 async def login(payload: LoginSchema):
-    """Đăng nhập bằng Email và Password, trả về Secret Key."""
+    """Đăng nhập bằng Email và Password, trả về Bearer token cho dashboard."""
     async with async_session() as session:
         result = await session.execute(
             select(Tenant).filter(Tenant.email == payload.email)
@@ -137,10 +153,21 @@ async def login(payload: LoginSchema):
         if not tenant.is_active:
             raise HTTPException(status_code=403, detail="Tài khoản đã bị khóa.")
 
+        access_token = security_utils.generate_admin_token(
+            tenant_id=str(tenant.id),
+            email=tenant.email or "",
+        )
+
         return {
             "message": "Đăng nhập thành công.",
-            "secret_key": tenant.secret_key,
-            "tenant_name": tenant.name
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+            "tenant": {
+                "id": str(tenant.id),
+                "name": tenant.name,
+                "email": tenant.email,
+            },
         }
 
 
@@ -150,9 +177,9 @@ async def login(payload: LoginSchema):
 
 @router.get("/me")
 async def get_tenant_info(request: Request):
-    """Lấy thông tin chi tiết của Tenant hiện tại. Yêu cầu Secret Key."""
+    """Lấy thông tin chi tiết của Tenant hiện tại. Yêu cầu Bearer token."""
     if not request.state.is_admin:
-        raise HTTPException(status_code=403, detail="Yêu cầu Secret Key (sk_live_...)")
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
 
     async with async_session() as session:
         result = await session.execute(
@@ -165,9 +192,9 @@ async def get_tenant_info(request: Request):
         return {
             "id": str(tenant.id),
             "name": tenant.name,
+            "email": tenant.email,
             "slug": tenant.slug,
             "public_key": tenant.public_key,
-            "secret_key": "sk_live_" + "•" * 20,   # masked
             "allowed_origins": tenant.allowed_origins,
             "widget_color": tenant.widget_color,
             "widget_placeholder": tenant.widget_placeholder,
@@ -186,9 +213,9 @@ async def get_tenant_info(request: Request):
 
 @router.patch("/me")
 async def update_tenant_info(payload: TenantUpdateSchema, request: Request):
-    """Cập nhật name, allowed_origins và widget settings của tenant. Yêu cầu Secret Key."""
+    """Cập nhật name, allowed_origins và widget settings của tenant. Yêu cầu Bearer token."""
     if not request.state.is_admin:
-        raise HTTPException(status_code=403, detail="Yêu cầu Secret Key (sk_live_...)")
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
 
     async with async_session() as session:
         result = await session.execute(
@@ -242,10 +269,10 @@ async def update_tenant_info(payload: TenantUpdateSchema, request: Request):
 async def rotate_api_keys(request: Request):
     """
     Tạo cặp API keys mới và vô hiệu hoá keys cũ ngay lập tức.
-    Yêu cầu Secret Key. Hành động không thể hoàn tác.
+    Yêu cầu Bearer token. Hành động không thể hoàn tác.
     """
     if not request.state.is_admin:
-        raise HTTPException(status_code=403, detail="Yêu cầu Secret Key (sk_live_...)")
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
 
     async with async_session() as session:
         result = await session.execute(
@@ -278,7 +305,7 @@ async def rotate_api_keys(request: Request):
 async def save_db_config(config: DBConfigSchema, request: Request):
     """Lưu và mã hoá cấu hình Database khách hàng."""
     if not request.state.is_admin:
-        raise HTTPException(status_code=403, detail="Yêu cầu Secret Key.")
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
 
     tenant_id = request.state.tenant_id
     encrypted_user = security_utils.encrypt(config.db_username).encode()
@@ -323,7 +350,7 @@ async def save_db_config(config: DBConfigSchema, request: Request):
 async def get_db_config(request: Request):
     """Lấy cấu hình DB (password sẽ bị ẩn)."""
     if not request.state.is_admin:
-        raise HTTPException(status_code=403, detail="Yêu cầu Secret Key.")
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
 
     async with async_session() as session:
         result = await session.execute(
@@ -357,7 +384,7 @@ async def get_db_config(request: Request):
 async def test_db_connection(config: DBConfigSchema, request: Request):
     """Kiểm tra kết nối tới database của khách hàng mà không lưu cấu hình."""
     if not request.state.is_admin:
-        raise HTTPException(status_code=403, detail="Yêu cầu Secret Key.")
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
 
     driver = "postgresql+asyncpg" if config.db_type == "postgresql" else "mysql+aiomysql"
     

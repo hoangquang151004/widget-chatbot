@@ -1,5 +1,9 @@
 import os
 import base64
+import json
+import time
+import hmac
+import hashlib
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -40,6 +44,63 @@ class SecurityUtils:
         return f"{prefix}_{secrets.token_urlsafe(32)}"
 
     @classmethod
+    def generate_admin_token(cls, tenant_id: str, email: str) -> str:
+        """Generate a signed bearer token for admin dashboard sessions."""
+        header = {"alg": "HS256", "typ": "JWT"}
+        payload = {
+            "sub": tenant_id,
+            "email": email,
+            "type": "admin",
+            "exp": int(time.time()) + int(settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
+        }
+
+        header_b64 = cls._b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+        payload_b64 = cls._b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+        signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
+
+        signature = hmac.new(
+            settings.SECRET_KEY.encode("utf-8"),
+            signing_input,
+            hashlib.sha256,
+        ).digest()
+        signature_b64 = cls._b64url_encode(signature)
+        return f"{header_b64}.{payload_b64}.{signature_b64}"
+
+    @classmethod
+    def verify_admin_token(cls, token: str) -> Optional[dict]:
+        """Validate signature and expiry for an admin bearer token."""
+        try:
+            parts = token.split(".")
+            if len(parts) != 3:
+                return None
+
+            header_b64, payload_b64, signature_b64 = parts
+            signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
+            expected_sig = hmac.new(
+                settings.SECRET_KEY.encode("utf-8"),
+                signing_input,
+                hashlib.sha256,
+            ).digest()
+            actual_sig = cls._b64url_decode(signature_b64)
+
+            if not hmac.compare_digest(expected_sig, actual_sig):
+                return None
+
+            payload_raw = cls._b64url_decode(payload_b64).decode("utf-8")
+            payload = json.loads(payload_raw)
+
+            if payload.get("type") != "admin":
+                return None
+            if int(payload.get("exp", 0)) < int(time.time()):
+                return None
+            if not payload.get("sub"):
+                return None
+
+            return payload
+        except Exception:
+            return None
+
+    @classmethod
     def encrypt(cls, data: str) -> str:
         """
         Encrypts data using AES-256-GCM.
@@ -72,5 +133,14 @@ class SecurityUtils:
         digest = hashes.Hash(hashes.SHA256())
         digest.update(raw_key.encode())
         return digest.finalize()
+
+    @staticmethod
+    def _b64url_encode(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).decode("utf-8").rstrip("=")
+
+    @staticmethod
+    def _b64url_decode(data: str) -> bytes:
+        padding = "=" * (-len(data) % 4)
+        return base64.urlsafe_b64decode(data + padding)
 
 security_utils = SecurityUtils()

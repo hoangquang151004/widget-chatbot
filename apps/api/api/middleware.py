@@ -1,5 +1,4 @@
 import logging
-import time
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -7,7 +6,7 @@ from sqlalchemy.future import select
 from db.session import async_session
 from models.tenant import Tenant
 from core.security import security_utils
-from typing import Optional, List
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +20,14 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     SKIP_PATHS = [
         "/api/health", 
         "/api/v1/admin/register", 
+        "/api/v1/admin/login",
         "/api/v1/chat/config",
         "/docs", 
         "/redoc", 
         "/openapi.json"
     ]
+
+    ADMIN_PATH_PREFIXES = ["/api/v1/admin", "/api/v1/files"]
 
     async def dispatch(self, request: Request, call_next):
         # 0. Allow OPTIONS for CORS preflight
@@ -36,7 +38,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if any(request.url.path.startswith(path) for path in self.SKIP_PATHS):
             return await call_next(request)
 
-        # 2. Extract API Key from Header (Support both X-API-Key and X-Widget-Key)
+        # 2. Admin routes now authenticate via Bearer token
+        if self._is_admin_path(request.url.path):
+            return await self._authenticate_admin(request, call_next)
+
+        # 3. Non-admin routes authenticate by API key (widget/public chat)
         api_key = request.headers.get("X-Widget-Key") or request.headers.get("X-API-Key")
         if not api_key:
             return JSONResponse(
@@ -44,7 +50,52 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Missing API Key (X-Widget-Key or X-API-Key header)"}
             )
 
-        # 3. Database Authenticate Tenant
+        return await self._authenticate_by_api_key(request, call_next, api_key)
+
+    async def _authenticate_admin(self, request: Request, call_next):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Missing Bearer token"}
+            )
+
+        token = auth_header.replace("Bearer ", "", 1).strip()
+        payload = security_utils.verify_admin_token(token)
+        if not payload:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Invalid or expired token"}
+            )
+
+        tenant_id = payload.get("sub")
+        async with async_session() as session:
+            result = await session.execute(
+                select(Tenant).filter(Tenant.id == tenant_id, Tenant.is_active == True)
+            )
+            tenant = result.scalars().first()
+            if not tenant:
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"detail": "Invalid tenant"}
+                )
+
+            from core.rate_limit import rate_limiter
+            if await rate_limiter.is_rate_limited(str(tenant.id), key_type="admin"):
+                return JSONResponse(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    content={"detail": "Too many admin requests. Please try again later."}
+                )
+
+            request.state.tenant_id = str(tenant.id)
+            request.state.tenant_name = tenant.name
+            request.state.is_admin = True
+
+        return await call_next(request)
+
+    async def _authenticate_by_api_key(self, request: Request, call_next, api_key: str):
+
+        # Database Authenticate Tenant
         async with async_session() as session:
             # Determine if it's public or secret key
             is_public = security_utils.is_public_key(api_key)
@@ -105,6 +156,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             
             logger.info(f"Auth Success: Tenant={tenant.name}, ID={tenant.id}, Admin={not is_public}")
             
-        # 6. Proceed to next handler
+        # Proceed to next handler
         response = await call_next(request)
         return response
+
+    def _is_admin_path(self, path: str) -> bool:
+        return any(path.startswith(prefix) for prefix in self.ADMIN_PATH_PREFIXES)
