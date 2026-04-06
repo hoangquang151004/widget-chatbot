@@ -52,8 +52,6 @@ Hệ thống áp dụng cơ chế xác thực tương tự Stripe:
 cd apps/api
 python -m venv .venv
 .\.venv\Scripts\activate
-pip install -r requirements.txt
-# Copy .env.example sang .env và cấu hình các keys
 python -m uvicorn main:app --reload --port 8001
 ```
 

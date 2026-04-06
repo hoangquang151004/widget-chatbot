@@ -101,7 +101,7 @@ export default function OverviewPage() {
     };
 
     load();
-  }, [accessToken]);
+  }, [accessToken, api]);
 
   const chartData = useMemo(
     () =>

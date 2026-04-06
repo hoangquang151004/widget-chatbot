@@ -84,9 +84,9 @@ class Settings(BaseSettings):
     PAYOS_CHECKOUT_RETURN_URL: str = ""
     PAYOS_CHECKOUT_CANCEL_URL: str = ""
     # Giá gói (VND) — điền theo bảng giá thực tế trên PayOS
-    PAYOS_AMOUNT_PRO_VND: int = 500_000
-    PAYOS_AMOUNT_ENTERPRISE_VND: int = 2_000_000
-    PAYOS_AMOUNT_ENTERPRISE_PRO_VND: int = 5_000_000
+    PAYOS_AMOUNT_PRO_VND: int = 399_000
+    PAYOS_AMOUNT_ENTERPRISE_VND: int = 999_000
+    PAYOS_AMOUNT_ENTERPRISE_PRO_VND: int = 2_499_000
 
     # ── Storage ──────────────────────────────────────────────────────────────
     STORAGE_PATH: str = "storage"

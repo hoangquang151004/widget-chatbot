@@ -17,5 +17,5 @@ Tenant cần biết chatbot của họ hoạt động hiệu quả ra sao:
 4. **Frontend:** Hiển thị các thẻ thông số (Cards) ở đầu trang Dashboard Home.
 
 ## 4. Định nghĩa hoàn thành (DoD)
-- [ ] Dashboard Home hiển thị ít nhất 3 chỉ số: Tổng tin nhắn, Tài liệu đã upload, Token sử dụng.
-- [ ] Biểu đồ xu hướng tin nhắn hiển thị đúng dữ liệu thực tế từ DB.
+- [x] Dashboard Home hiển thị ít nhất 3 chỉ số: Tổng tin nhắn, Tài liệu đã upload, Token sử dụng.
+- [x] Biểu đồ xu hướng tin nhắn hiển thị đúng dữ liệu thực tế từ DB (`chat_messages` theo ngày UTC; KPI/breakdown từ `chat_messages` + đếm `tenant_documents`).

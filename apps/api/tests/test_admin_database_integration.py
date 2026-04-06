@@ -187,3 +187,24 @@ async def test_admin_database_flow_save_roundtrip_and_bad_password_test(async_cl
     assert me_imp.json().get("role") == "tenant"
     st_imp = await async_client.get("/api/v1/platform-admin/stats", headers=h_imp)
     assert st_imp.status_code == 403
+
+    # Analytics (dashboard KPI + biểu đồ) — cùng async_client / tenant đầu
+    r_an = await async_client.get("/api/v1/admin/analytics/stats", headers=headers)
+    assert r_an.status_code == 200, r_an.text
+    data_an = r_an.json()
+    assert data_an["total_user_messages"] >= 0
+    assert data_an["document_count"] >= 0
+    assert data_an["total_tokens_estimated"] >= 0
+    rb = data_an["reply_breakdown"]
+    assert rb["rag"] >= 0 and rb["sql"] >= 0 and rb["general"] >= 0
+
+    r_hist = await async_client.get(
+        "/api/v1/admin/analytics/history?days=7",
+        headers=headers,
+    )
+    assert r_hist.status_code == 200, r_hist.text
+    hist_body = r_hist.json()
+    assert hist_body["days"] == 7
+    assert len(hist_body["series"]) == 7
+    for row in hist_body["series"]:
+        assert row["user_messages"] >= 0

@@ -88,6 +88,8 @@ tenants                    ← Core account (email, password, plan)
 | POST | `/api/v1/admin/database` | Lưu DB config |
 | POST | `/api/v1/admin/database/test` | Test kết nối |
 | GET | `/api/v1/admin/billing/summary` | Billing: usage + hạn mức theo `tenants.plan` (tin nhắn user theo tháng/ngày, RAG byte + `document_limit`, SQL) |
+| GET | `/api/v1/admin/analytics/stats` | KPI: tin nhắn user, tài liệu, token (assistant), phân loại RAG/SQL/General |
+| GET | `/api/v1/admin/analytics/history` | Chuỗi tin user theo ngày (UTC), query `days` — biểu đồ Dashboard |
 | GET | `/api/v1/admin/billing/payos/config` | PayOS: `{ payos_enabled }` — bật khi cấu hình đủ biến môi trường |
 | POST | `/api/v1/admin/billing/payos/checkout` | PayOS: tạo link thanh toán (`target_plan`: `pro` \| `enterprise` \| `enterprise_pro`) |
 
@@ -109,6 +111,18 @@ tenants                    ← Core account (email, password, plan)
 | POST | `/api/v1/files/upload` | Upload tài liệu RAG |
 | GET | `/api/v1/files/list` | Danh sách tài liệu |
 | DELETE | `/api/v1/files/{id}` | Xóa tài liệu |
+
+### Platform Admin (Bearer — chỉ `tenants.role = platform_admin`, tenant thường → 403)
+| Method | Path | Mô tả |
+|--------|------|-------|
+| GET | `/api/v1/platform-admin/stats` | Tổng quan: số tenant, plan, doanh thu PayOS (nếu có) |
+| GET | `/api/v1/platform-admin/tenants` | Danh sách tenant (`q`, `limit`, `offset`) |
+| PATCH | `/api/v1/platform-admin/tenants/{id}` | Kích hoạt / khóa (`is_active`) |
+| POST | `/api/v1/platform-admin/impersonate` | Token thao tác như tenant (audit log) |
+| GET | `/api/v1/platform-admin/billing/summary` | Giao dịch / tổng hợp PayOS |
+| GET | `/api/v1/platform-admin/system/status` | PostgreSQL, Redis, Qdrant, Celery |
+
+**UI web:** khu vực `/admin` (và alias `/dashboard/platform-admin/*` → cùng nội dung qua middleware Next.js).
 
 ---
 

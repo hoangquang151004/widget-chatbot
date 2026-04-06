@@ -12,8 +12,8 @@
 | TASK-01 | SQL Agent Integration & Guarding | Hoàn thành | Cao | Guard orchestrator + `tenant_databases`; prompt dialect/schema phức tạp; log pipeline `run_text_to_sql`; test mock — `task_01_sql_integration.md` |
 | TASK-02 | Production Hardening & SSL | Một phần (code/repo) | Cao | Nginx: header + rate limit IP `/api/`, snippets SSL/HSTS, `server_tokens off`; env dev/prod example; runbook Certbot. **Còn:** bật HTTPS trên server thật + audit điểm A |
 | TASK-03 | Billing & PayOS | Hoàn thành (cấu hình PayOS trên my.payos.vn) | Trung bình | Checkout + webhook `/api/v1/webhooks/payos`, bảng `payos_payment_intents`, dashboard Billing — cần bật biến môi trường + webhook công khai |
-| TASK-04 | Analytics & Usage Dashboard | Todo | Trung bình | `chat_analytics` có model; cần API `admin/analytics/*` + biểu đồ Dashboard |
-| TASK-05 | Platform Admin Dashboard | Một phần | Thấp | Schema dùng `tenants.role = 'platform_admin'` (không dùng flag `is_platform_admin`). Còn router/UI/impersonate |
+| TASK-04 | Analytics & Usage Dashboard | Hoàn thành | Trung bình | `GET admin/analytics/stats` + `history`; Dashboard Home KPI + Recharts; kiểm tra trong `test_admin_database_integration.py` |
+| TASK-05 | Platform Admin Dashboard | Hoàn thành | Thấp | API `platform-admin/*`, UI `/admin`, impersonate; alias `/dashboard/platform-admin` → `/admin`; test 403 tenant trong `test_admin_database_integration.py` |
 | TASK-06 | E-commerce / Ordering | Todo (epic tùy chọn) | Tùy sản phẩm | **Không** mặc định ưu tiên cao cho mọi tenant. Xem [task_06_ecommerce_ordering.md](task_06_ecommerce_ordering.md) — mâu thuẫn với Text-to-SQL chỉ SELECT trong AGENTS.md nếu mở INSERT tự do |
 
 ---
@@ -32,12 +32,14 @@
 
 ### 3. Business & Dashboard (TASK-03, 04, 05)
 - [x] PayOS webhook + tạo link thanh toán → cập nhật `tenants.plan`.
-- [ ] Biểu đồ tin nhắn / usage trên Dashboard.
-- [ ] Platform admin: API + UI (dựa trên `role = platform_admin`).
+- [x] Biểu đồ tin nhắn / usage trên Dashboard (`/dashboard` — API `admin/analytics/*`).
+- [x] Platform admin: API + UI (`role = platform_admin`, `/admin`; alias URL trong middleware web).
 
 ---
 
 ## Nhật ký thay đổi
+- **2026-04-06**: TASK-05 — Đồng bộ tài liệu + middleware alias `/dashboard/platform-admin` → `/admin`; bảng endpoint Platform Admin trong `AGENTS.md`.
+- **2026-04-06**: TASK-04 — API analytics + biểu đồ Dashboard Home; test tích hợp admin analytics.
 - **2026-04-06**: Khởi tạo giai đoạn `fix_bug_3` để xử lý các hạng mục cuối cùng trước khi release.
 - **2026-04-06**: Đồng bộ PROGRESS với code hiện tại (plan limits, rate limit, schema `plan` / `role`); TASK-06 ghi nhận là epic tùy chọn.
 - **2026-04-06**: TASK-01 hoàn thành — guard DB, prompt dialect + schema phức tạp, logging pipeline, test `test_task01_sql_pipeline.py` / `test_sql_generator_dialect.py`.

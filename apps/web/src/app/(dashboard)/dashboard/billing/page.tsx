@@ -82,7 +82,7 @@ const PLAN_FREE_BASIC: PlanDef[] = [
     id: "free",
     title: "Miễn phí",
     blurb: "Bắt đầu nhanh với RAG từ tài liệu tải lên.",
-    priceLabel: "0đ",
+    priceLabel: "Free",
     priceHint: "/tháng",
     featured: false,
     features: [
@@ -95,8 +95,8 @@ const PLAN_FREE_BASIC: PlanDef[] = [
     id: "basic",
     title: "Cơ bản",
     blurb: "Widget + RAG + tư vấn dữ liệu sản phẩm trong database.",
-    priceLabel: "Liên hệ",
-    priceHint: "báo giá",
+    priceLabel: "399k",
+    priceHint: "/tháng",
     featured: false,
     features: [
       "Dung lượng tài liệu tính theo 100MB",
@@ -112,8 +112,8 @@ const PLAN_ENTERPRISE: PlanDef = {
   id: "enterprise",
   title: "Doanh nghiệp",
   blurb: "Nền tảng đầy đủ: nhiều widget, bán hàng trên chatbot và trải nghiệm nâng cao.",
-  priceLabel: "Liên hệ",
-  priceHint: "theo nhu cầu",
+  priceLabel: "999k",
+  priceHint: "/tháng",
   featured: true,
   features: [
     "2 widget: cửa hàng và admin",
@@ -132,10 +132,9 @@ const PLAN_ENTERPRISE: PlanDef = {
 const PLAN_ENTERPRISE_PRO: PlanDef = {
   id: "enterprise_pro",
   title: "Doanh nghiệp Pro",
-  blurb:
-    "Bản nâng cấp của gói Doanh nghiệp: giữ nguyên mọi tính năng gói 3, thêm dung lượng lớn hơn, lưu hội thoại tập trung và phân tích hành vi.",
-  priceLabel: "Liên hệ",
-  priceHint: "nâng cấp từ Doanh nghiệp",
+  blurb:"Bản nâng cấp của gói Doanh nghiệp: giữ nguyên mọi tính năng gói 3, thêm dung lượng lớn hơn, lưu hội thoại tập trung và phân tích hành vi.",
+  priceLabel: "2tr499",
+  priceHint: "/tháng",
   featured: false,
   isUpgrade: true,
   features: [
@@ -224,11 +223,6 @@ export default function BillingPage() {
 
     loadBillingSummary();
   }, [accessToken]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setPayosReturn(new URLSearchParams(window.location.search).get("payos"));
-  }, []);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -376,22 +370,19 @@ export default function BillingPage() {
           >
             Gói hiện tại
           </button>
-        ) : payosEnabled && payosTarget ? (
+        ) : payosTarget ? (
           <button
             type="button"
-            disabled={payosLoading}
-            onClick={() => handlePayosCheckout(payosTarget)}
-            className="mt-auto w-full py-3 px-6 rounded-full text-center bg-primary text-on-primary font-bold shadow-lg shadow-primary/30 hover:opacity-90 disabled:opacity-60"
+            disabled={payosLoading || !payosEnabled}
+            title={!payosEnabled ? PAYMENT_DISABLED_HINT : undefined}
+            onClick={() => {
+              if (!payosEnabled) return;
+              handlePayosCheckout(payosTarget);
+            }}
+            className="mt-auto w-full py-3 px-6 rounded-full text-center bg-primary text-on-primary font-bold shadow-lg shadow-primary/30 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {payosLoading ? "Đang tạo link…" : `Thanh toán PayOS — ${def.title}`}
           </button>
-        ) : def.id === "enterprise" ? (
-          <a
-            href={mailtoPlans}
-            className="mt-auto w-full py-3 px-6 rounded-full text-center bg-primary text-on-primary font-bold shadow-lg shadow-primary/30 hover:opacity-90"
-          >
-            Liên hệ — Doanh nghiệp
-          </a>
         ) : showMailtoCta ? (
           <a
             href={mailtoPlans}
@@ -551,25 +542,8 @@ export default function BillingPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 items-stretch">
           {PLAN_FREE_BASIC.map((def) => renderPricingCard(def))}
-
-          <div className="md:col-span-2 xl:col-span-2 rounded-2xl border border-outline-variant/15 bg-surface-container-low/40 p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-2 mb-4 text-center">
-              <span className="material-symbols-outlined text-primary hidden sm:inline text-[22px]">
-                trending_up
-              </span>
-              <p className="text-sm font-semibold text-on-surface leading-snug">
-                <span className="text-primary">Doanh nghiệp Pro</span> là bản{" "}
-                <span className="font-bold">nâng cấp</span> của{" "}
-                <span className="font-bold">Doanh nghiệp</span> — không thay thế
-                gói 3; bạn giữ toàn bộ tính năng gói Doanh nghiệp và bổ sung thêm
-                các hạng mục trong cột Pro.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
-              {renderPricingCard(PLAN_ENTERPRISE)}
-              {renderPricingCard(PLAN_ENTERPRISE_PRO)}
-            </div>
-          </div>
+          {renderPricingCard(PLAN_ENTERPRISE)}
+          {renderPricingCard(PLAN_ENTERPRISE_PRO)}
         </div>
 
         <div className="mt-12 max-w-xl mx-auto text-center">
