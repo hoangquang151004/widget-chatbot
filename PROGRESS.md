@@ -18,8 +18,9 @@
 | 1     | Database Models & Schema | ✅ Hoàn thành   | `tasks/task_phase_1.md` |
 | 2     | Alembic Migration        | ✅ Hoàn thành   | `tasks/task_phase_2.md` |
 | 3     | Backend API Refactor     | ✅ Hoàn thành   | `tasks/task_phase_3.md` |
-| 4     | Frontend Integration     | ⬜ Chưa bắt đầu | `tasks/task_phase_4.md` |
-| 5     | Testing & Verification   | 🔄 Đang làm     | `tasks/task_phase_5.md` |
+| 4     | Frontend Integration     | ✅ Hoàn thành   | `tasks/task_phase_4.md` |
+| 5     | Testing & Verification   | ✅ Hoàn thành   | `tasks/task_phase_5.md` |
+| 6     | Dashboard & Product gaps | ✅ Hoàn thành   | `tasks/task_phase_6.md` |
 
 **Legend:** ⬜ Chưa bắt đầu | 🔄 Đang làm | ✅ Hoàn thành | ❌ Lỗi
 
@@ -103,8 +104,8 @@
 
 ### Settings Page (`dashboard/settings/page.tsx`)
 
-- Tách `PATCH /me` → `PATCH /widget` + `PATCH /ai-settings`
-- Thêm section cấu hình AI riêng biệt
+- **Hiện trạng:** Lưu/tải qua `GET` + `PATCH /api/v1/admin/me` (cập nhật gộp tenant + widget + AI). Vẫn có thể tách riêng `PATCH /widget` + `PATCH /ai-settings` nếu cần tối ưu partial update — không bắt buộc.
+- Section cấu hình AI (system prompt, RAG/SQL) đã nằm trong cùng trang Settings.
 
 ### Keys Page (`dashboard/keys/page.tsx`)
 
@@ -137,6 +138,23 @@
 
 ---
 
+## Phase 6 — Dashboard & Product gaps
+
+> **Mục tiêu:** Các trang/menu dashboard phản ánh đúng tính năng production: không link chết, quản trị origins (CORS widget), chuẩn hóa gọi API frontend, và làm rõ billing (hoặc ẩn/ghi chú cho đến khi tích hợp thanh toán).
+
+**Phạm vi (chi tiết trong `tasks/task_phase_6.md`):**
+
+- Trang **Hỗ trợ** (`/dashboard/support`): Sidebar đã link nhưng chưa có `page.tsx` → cần trang tĩnh hoặc form liên hệ tối thiểu.
+- Trang **Allowed origins**: API `GET/POST/DELETE /api/v1/admin/origins` đã có; cần UI dashboard + mục sidebar (để tenant whitelist domain cho widget).
+- **Billing**: Giữ sync usage từ `GET /billing/summary`; các nút nâng cấp / thẻ / hóa đơn — either tích hợp provider (sau này) hoặc redesign thành “sắp ra mắt” không giả mock thanh toán.
+- **Knowledge Base**: Thay `fetch` thuần bằng `useApi` (có thể cần hỗ trợ `FormData` trong hook).
+- **Sidebar**: Gói cố định “Professional” — nên bind từ `GET /me` (`plan`).
+- **Database page**: Nút floating không chức năng — gỡ hoặc gắn hành động rõ ràng.
+
+**Trạng thái:** ✅ Hoàn thành (2026-04-03): trang Domain/CORS, Hỗ trợ, `useApi` + upload FormData, Billing trung thực, sidebar theo `plan`, FAB database cuộn về form.
+
+---
+
 ## Rủi ro & Lưu ý
 
 | Rủi ro                                                  | Mức độ     | Xử lý                                                       |
@@ -147,6 +165,19 @@
 | Break Celery tasks                                      | Trung bình | Kiểm tra import models                                      |
 
 ---
+
+## Định nghĩa gói dịch vụ (Billing UI + backend)
+
+> 2026-04-03: Trang **Billing** + `core/plan_limits.py`: hạn mức **50 tin user/tháng** (starter), **400/ngày** (pro), RAG theo byte + tối đa **2 tài liệu** (starter), SQL theo gói, `enterprise_pro` trong CHECK constraint. Enforcement: upload files, chat (429), admin DB save/test, orchestrator tắt SQL nếu gói không hỗ trợ. Chi tiết: **`tasks/task_billing_plans.md`**.
+
+---
+
+## Ghi chú đồng bộ tiến độ (2026-04-03)
+
+- **Phase 6** được thêm để theo dõi hạng mục dashboard còn thiếu (support 404, origins UI, billing placeholder, `useApi` cho files). Checklist: `tasks/task_phase_6.md`, sprint hiện tại: `task.md`.
+- Phase 4–5 đánh dấu hoàn thành theo checklist `tasks/task_phase_5.md` và regression dashboard/widget/RAG/stream; trang **Database** đã nối API và có kiểm thử tích hợp `tests/test_admin_database_integration.py` (load/test/lưu + introspection schema Text-to-SQL).
+- CI backend: thêm service **Qdrant**, bước **Alembic upgrade head** trước pytest; smoke cục bộ: `apps/api/scripts/run_smoke_integration.py`.
+- Production: header bảo mật tối thiểu khi `ENV=production` và runbook `docs/PRODUCTION_RUNBOOK.md`.
 
 ## Ghi chú Cleanup Legacy (2026-04-03)
 

@@ -16,6 +16,7 @@ class Tenant(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     plan = Column(String(20), nullable=False, default="starter")
+    role = Column(String(32), nullable=False, default="tenant")
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -44,7 +45,14 @@ class Tenant(Base):
     chat_analytics = relationship("ChatAnalytics", back_populates="tenant", cascade="all, delete-orphan")
 
     __table_args__ = (
-        CheckConstraint("plan IN ('starter', 'pro', 'enterprise')", name="ck_tenants_plan"),
+        CheckConstraint(
+            "plan IN ('starter', 'pro', 'enterprise', 'enterprise_pro')",
+            name="ck_tenants_plan",
+        ),
+        CheckConstraint(
+            "role IN ('tenant', 'platform_admin')",
+            name="ck_tenants_role",
+        ),
     )
 
     def __repr__(self):

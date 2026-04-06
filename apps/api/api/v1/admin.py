@@ -1,11 +1,12 @@
 import re
 import secrets
+import logging
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import urlparse
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, text
 from sqlalchemy.engine import URL
@@ -13,11 +14,12 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.future import select
 
 from core.config import settings
+from core.deps import require_tenant_account
+from core.plan_limits import get_ai_message_usage_for_billing, get_limits, normalize_plan
 from core.security import security_utils
 from db.session import async_session
 from models.ai_settings import TenantAiSettings
 from models.allowed_origin import TenantAllowedOrigin
-from models.chat import ChatMessage
 from models.document import TenantDocument
 from models.tenant import Tenant
 from models.tenant_db_config import TenantDatabaseConfig
@@ -25,6 +27,7 @@ from models.tenant_key import TenantKey
 from models.widget_config import TenantWidgetConfig
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,6 +63,20 @@ class AiSettingsUpdateSchema(BaseModel):
     is_sql_enabled: Optional[bool] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+
+
+class TenantMeUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    # Widget settings
+    bot_name: Optional[str] = None
+    primary_color: Optional[str] = None
+    logo_url: Optional[str] = None
+    greeting: Optional[str] = None
+    placeholder: Optional[str] = None
+    # AI settings
+    system_prompt: Optional[str] = None
+    is_rag_enabled: Optional[bool] = None
+    is_sql_enabled: Optional[bool] = None
 
 
 class CreateKeySchema(BaseModel):
@@ -161,6 +178,7 @@ async def register_tenant(payload: RegisterTenantSchema):
             name=payload.name,
             email=payload.email,
             password_hash=security_utils.hash_password(payload.password),
+            role="tenant",
             is_active=True,
         )
         session.add(tenant)
@@ -232,6 +250,7 @@ async def login(payload: LoginSchema):
         access_token = security_utils.generate_admin_token(
             tenant_id=str(tenant.id),
             email=tenant.email or "",
+            role=tenant.role or "tenant",
         )
 
         return {
@@ -239,10 +258,12 @@ async def login(payload: LoginSchema):
             "access_token": access_token,
             "token_type": "bearer",
             "expires_in_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+            "role": tenant.role or "tenant",
             "tenant": {
                 "id": str(tenant.id),
                 "name": tenant.name,
                 "email": tenant.email,
+                "role": tenant.role or "tenant",
             },
         }
 
@@ -283,6 +304,7 @@ async def get_tenant_info(request: Request):
             "name": tenant.name,
             "email": tenant.email,
             "plan": tenant.plan,
+            "role": tenant.role or "tenant",
             "public_key": public_key.key_value if public_key else None,
             "widget": {
                 "bot_name": widget.bot_name if widget else "Tro ly AI",
@@ -305,11 +327,66 @@ async def get_tenant_info(request: Request):
         }
 
 
+@router.patch("/me", dependencies=[Depends(require_tenant_account)])
+async def update_tenant_me(payload: TenantMeUpdateSchema, request: Request):
+    """Cập nhật thông tin tổng hợp của Tenant (Name, Widget, AI)."""
+    if not request.state.is_admin:
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
+
+    tenant_id = request.state.tenant_id
+    async with async_session() as session:
+        tenant = await _get_tenant_or_404(session, tenant_id)
+
+        # 1. Update Tenant Name
+        if payload.name is not None:
+            tenant.name = payload.name
+
+        # 2. Update Widget Config
+        widget_result = await session.execute(
+            select(TenantWidgetConfig).filter(TenantWidgetConfig.tenant_id == tenant.id)
+        )
+        widget = widget_result.scalars().first()
+        if not widget:
+            widget = TenantWidgetConfig(tenant_id=tenant.id)
+            session.add(widget)
+        
+        if payload.bot_name is not None:
+            widget.bot_name = payload.bot_name
+        if payload.primary_color is not None:
+            widget.primary_color = payload.primary_color
+        if payload.logo_url is not None:
+            widget.logo_url = payload.logo_url
+        if payload.greeting is not None:
+            widget.greeting = payload.greeting
+        if payload.placeholder is not None:
+            widget.placeholder = payload.placeholder
+
+        # 3. Update AI Settings
+        ai_result = await session.execute(
+            select(TenantAiSettings).filter(TenantAiSettings.tenant_id == tenant.id)
+        )
+        ai_settings = ai_result.scalars().first()
+        if not ai_settings:
+            ai_settings = TenantAiSettings(tenant_id=tenant.id)
+            session.add(ai_settings)
+        
+        if payload.system_prompt is not None:
+            ai_settings.system_prompt = payload.system_prompt
+        if payload.is_rag_enabled is not None:
+            ai_settings.is_rag_enabled = payload.is_rag_enabled
+        if payload.is_sql_enabled is not None:
+            ai_settings.is_sql_enabled = payload.is_sql_enabled
+
+        await session.commit()
+    
+    return {"message": "Cập nhật thông tin thành công."}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Widget & AI settings
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.patch("/widget")
+@router.patch("/widget", dependencies=[Depends(require_tenant_account)])
 async def update_widget_settings(payload: WidgetUpdateSchema, request: Request):
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
@@ -364,7 +441,7 @@ async def update_widget_settings(payload: WidgetUpdateSchema, request: Request):
     }
 
 
-@router.patch("/ai-settings")
+@router.patch("/ai-settings", dependencies=[Depends(require_tenant_account)])
 async def update_ai_settings(payload: AiSettingsUpdateSchema, request: Request):
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
@@ -412,7 +489,7 @@ async def update_ai_settings(payload: AiSettingsUpdateSchema, request: Request):
 # Keys API
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/keys")
+@router.get("/keys", dependencies=[Depends(require_tenant_account)])
 async def get_keys(request: Request):
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
@@ -440,7 +517,7 @@ async def get_keys(request: Request):
     ]
 
 
-@router.post("/keys", status_code=201)
+@router.post("/keys", status_code=201, dependencies=[Depends(require_tenant_account)])
 async def create_key(payload: CreateKeySchema, request: Request):
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
@@ -477,7 +554,7 @@ async def create_key(payload: CreateKeySchema, request: Request):
     }
 
 
-@router.delete("/keys/{key_id}")
+@router.delete("/keys/{key_id}", dependencies=[Depends(require_tenant_account)])
 async def revoke_key(key_id: UUID, request: Request):
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
@@ -504,7 +581,7 @@ async def revoke_key(key_id: UUID, request: Request):
 # Allowed origins API
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/origins")
+@router.get("/origins", dependencies=[Depends(require_tenant_account)])
 async def get_origins(request: Request):
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
@@ -529,7 +606,7 @@ async def get_origins(request: Request):
     ]
 
 
-@router.post("/origins", status_code=201)
+@router.post("/origins", status_code=201, dependencies=[Depends(require_tenant_account)])
 async def add_origin(payload: AddOriginSchema, request: Request):
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
@@ -569,7 +646,7 @@ async def add_origin(payload: AddOriginSchema, request: Request):
     }
 
 
-@router.delete("/origins/{origin_id}")
+@router.delete("/origins/{origin_id}", dependencies=[Depends(require_tenant_account)])
 async def delete_origin(origin_id: UUID, request: Request):
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
@@ -596,7 +673,7 @@ async def delete_origin(origin_id: UUID, request: Request):
 # Billing summary
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/billing/summary")
+@router.get("/billing/summary", dependencies=[Depends(require_tenant_account)])
 async def get_billing_summary(request: Request):
     """Trả về dữ liệu billing tổng hợp cho dashboard."""
     if not request.state.is_admin:
@@ -624,41 +701,34 @@ async def get_billing_summary(request: Request):
         )
         sql_connections = int(sql_connections_result.scalar() or 0)
 
-        message_count_result = await session.execute(
-            select(func.count(ChatMessage.id)).filter(ChatMessage.tenant_id == tenant_uuid)
+        plan_key = normalize_plan((tenant.plan or "starter").strip().lower())
+        lim = get_limits(plan_key)
+        ai_current, ai_limit, ai_window = await get_ai_message_usage_for_billing(
+            session, tenant_uuid, plan_key
         )
-        message_count = int(message_count_result.scalar() or 0)
-
-        plan = (tenant.plan or "starter").strip().lower()
-
-    limits = {
-        "free": {"ai_messages": 1000, "rag_storage_bytes": 10 * 1024 * 1024, "sql_connections": 0},
-        "starter": {"ai_messages": 1000, "rag_storage_bytes": 10 * 1024 * 1024, "sql_connections": 0},
-        "pro": {"ai_messages": 10000, "rag_storage_bytes": 100 * 1024 * 1024, "sql_connections": 2},
-        "enterprise": {"ai_messages": 0, "rag_storage_bytes": 0, "sql_connections": 0},
-    }
-    active_limits = limits.get(plan, limits["starter"])
 
     return {
         "tenant": {
             "id": str(tenant.id),
             "name": tenant.name,
             "email": tenant.email,
-            "plan": plan,
+            "plan": plan_key,
         },
         "usage": {
             "ai_messages": {
-                "current": message_count,
-                "limit": active_limits["ai_messages"],
+                "current": ai_current,
+                "limit": ai_limit,
+                "window": ai_window,
             },
             "rag_storage": {
                 "bytes": int(rag_storage_bytes or 0),
-                "limit_bytes": active_limits["rag_storage_bytes"],
+                "limit_bytes": lim.rag_storage_bytes,
                 "document_count": int(rag_document_count or 0),
+                "document_limit": lim.max_documents,
             },
             "sql_connections": {
                 "current": sql_connections,
-                "limit": active_limits["sql_connections"],
+                "limit": lim.max_sql_connections,
             },
         },
         "payment_methods": [],
@@ -670,7 +740,7 @@ async def get_billing_summary(request: Request):
 # DB Config endpoints
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.post("/database")
+@router.post("/database", dependencies=[Depends(require_tenant_account)])
 async def save_db_config(config: DBConfigSchema, request: Request):
     """Lưu và mã hoá cấu hình Database khách hàng."""
     if not request.state.is_admin:
@@ -682,6 +752,23 @@ async def save_db_config(config: DBConfigSchema, request: Request):
     encrypted_pass = security_utils.encrypt(config.db_password).encode()
 
     async with async_session() as session:
+        tenant_row = await session.get(Tenant, tenant_uuid)
+        plan_key = normalize_plan(tenant_row.plan if tenant_row else None)
+        lim = get_limits(plan_key)
+        if lim.max_sql_connections == 0:
+            raise HTTPException(
+                status_code=403,
+                detail="Gói hiện tại không hỗ trợ Text-to-SQL. Vui lòng nâng cấp gói để kết nối database.",
+            )
+
+        active_cfg = await session.execute(
+            select(func.count(TenantDatabaseConfig.id)).filter(
+                TenantDatabaseConfig.tenant_id == tenant_uuid,
+                TenantDatabaseConfig.is_active == True,
+            )
+        )
+        active_count = int(active_cfg.scalar() or 0)
+
         result = await session.execute(
             select(TenantDatabaseConfig).filter(TenantDatabaseConfig.tenant_id == tenant_uuid)
         )
@@ -695,6 +782,11 @@ async def save_db_config(config: DBConfigSchema, request: Request):
             db_config.db_user_enc = encrypted_user
             db_config.db_password_enc = encrypted_pass
         else:
+            if active_count >= lim.max_sql_connections:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Đã đạt số kết nối database tối đa ({lim.max_sql_connections}) cho gói hiện tại.",
+                )
             db_config = TenantDatabaseConfig(
                 tenant_id=tenant_uuid,
                 db_type=config.db_type,
@@ -708,15 +800,18 @@ async def save_db_config(config: DBConfigSchema, request: Request):
 
         await session.commit()
 
-    from ai.sql_agent import SQLAgent
+    # Invalidate Text-to-SQL schema cache in Redis (new SQL pipeline).
+    try:
+        from ai.sql.schema_loader import refresh_schema
 
-    if tenant_id in SQLAgent._schema_cache:
-        del SQLAgent._schema_cache[tenant_id]
+        await refresh_schema(tenant_id)
+    except Exception as e:
+        logger.warning("Failed to refresh SQL schema cache for tenant %s: %s", tenant_id, str(e))
 
     return {"message": "Cấu hình database đã được lưu thành công."}
 
 
-@router.get("/database")
+@router.get("/database", dependencies=[Depends(require_tenant_account)])
 async def get_db_config(request: Request):
     """Lấy cấu hình DB (password sẽ bị ẩn)."""
     if not request.state.is_admin:
@@ -751,11 +846,21 @@ async def get_db_config(request: Request):
         }
 
 
-@router.post("/database/test")
+@router.post("/database/test", dependencies=[Depends(require_tenant_account)])
 async def test_db_connection(config: DBConfigSchema, request: Request):
     """Kiểm tra kết nối tới database của khách hàng mà không lưu cấu hình."""
     if not request.state.is_admin:
         raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
+
+    tenant_uuid = UUID(request.state.tenant_id)
+    async with async_session() as session:
+        tenant_row = await session.get(Tenant, tenant_uuid)
+        plan_key = normalize_plan(tenant_row.plan if tenant_row else None)
+        if get_limits(plan_key).max_sql_connections == 0:
+            raise HTTPException(
+                status_code=403,
+                detail="Gói hiện tại không hỗ trợ Text-to-SQL.",
+            )
 
     driver = "postgresql+asyncpg" if config.db_type == "postgresql" else "mysql+aiomysql"
 

@@ -12,8 +12,17 @@ type BillingSummary = {
     plan: string;
   };
   usage: {
-    ai_messages: { current: number; limit: number };
-    rag_storage: { bytes: number; limit_bytes: number; document_count: number };
+    ai_messages: {
+      current: number;
+      limit: number;
+      window?: "month" | "day" | null;
+    };
+    rag_storage: {
+      bytes: number;
+      limit_bytes: number;
+      document_count: number;
+      document_limit?: number | null;
+    };
     sql_connections: { current: number; limit: number };
   };
   payment_methods: Array<Record<string, unknown>>;
@@ -21,14 +30,121 @@ type BillingSummary = {
 };
 
 const FALLBACK_BILLING: BillingSummary = {
-  tenant: { id: "", name: "", email: "", plan: "free" },
+  tenant: { id: "", name: "", email: "", plan: "starter" },
   usage: {
-    ai_messages: { current: 0, limit: 1000 },
-    rag_storage: { bytes: 0, limit_bytes: 10 * 1024 * 1024, document_count: 0 },
+    ai_messages: { current: 0, limit: 50, window: "month" },
+    rag_storage: {
+      bytes: 0,
+      limit_bytes: 15 * 1024 * 1024,
+      document_count: 0,
+      document_limit: 2,
+    },
     sql_connections: { current: 0, limit: 0 },
   },
   payment_methods: [],
   invoices: [],
+};
+
+/** Slug gói hiển thị — xem tasks/task_billing_plans.md */
+type BillingPlanId = "free" | "basic" | "enterprise" | "enterprise_pro";
+
+const CONTACT_EMAIL =
+  process.env.NEXT_PUBLIC_SALES_EMAIL ||
+  process.env.NEXT_PUBLIC_SUPPORT_EMAIL ||
+  "support@example.com";
+
+function billingMailto(subject: string): string {
+  return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}`;
+}
+
+function tenantPlanToBillingPlan(plan: string): BillingPlanId {
+  const p = plan.toLowerCase();
+  if (p === "enterprise_pro") return "enterprise_pro";
+  if (p === "enterprise") return "enterprise";
+  if (p === "pro") return "basic";
+  return "free";
+}
+
+type PlanDef = {
+  id: BillingPlanId;
+  title: string;
+  blurb: string;
+  priceLabel: string;
+  priceHint?: string;
+  featured: boolean;
+  features: string[];
+  /** Gói nâng cấp (hiển thị badge / CTA) */
+  isUpgrade?: boolean;
+};
+
+const PLAN_FREE_BASIC: PlanDef[] = [
+  {
+    id: "free",
+    title: "Miễn phí",
+    blurb: "Bắt đầu nhanh với RAG từ tài liệu tải lên.",
+    priceLabel: "0đ",
+    priceHint: "/tháng",
+    featured: false,
+    features: [
+      "Tư vấn từ tài liệu tải lên",
+      "Tối đa 2 tài liệu (khoảng 20 trang, trong giới hạn token)",
+      "Tối đa 50 yêu cầu / tháng",
+    ],
+  },
+  {
+    id: "basic",
+    title: "Cơ bản",
+    blurb: "Widget + RAG + tư vấn dữ liệu sản phẩm trong database.",
+    priceLabel: "Liên hệ",
+    priceHint: "báo giá",
+    featured: false,
+    features: [
+      "Dung lượng tài liệu tính theo 100MB",
+      "Tùy chỉnh giao diện widget",
+      "Tư vấn từ tài liệu tải lên",
+      "Tư vấn thông tin sản phẩm trong database (Text-to-SQL)",
+      "Tối đa 400 yêu cầu / ngày",
+    ],
+  },
+];
+
+const PLAN_ENTERPRISE: PlanDef = {
+  id: "enterprise",
+  title: "Doanh nghiệp",
+  blurb: "Nền tảng đầy đủ: nhiều widget, bán hàng trên chatbot và trải nghiệm nâng cao.",
+  priceLabel: "Liên hệ",
+  priceHint: "theo nhu cầu",
+  featured: true,
+  features: [
+    "2 widget: cửa hàng và admin",
+    "Upload tài liệu (phạm vi liên hệ)",
+    "Hỗ trợ câu hỏi phức tạp (đa câu hỏi)",
+    "Làm sạch dữ liệu trước khi tải lên",
+    "Dung lượng tài liệu tính theo 500MB",
+    "Tính năng bán hàng trên chatbot",
+    "Hỗ trợ tùy chỉnh theo yêu cầu",
+    "Text-to-speech (giọng đọc kiểu chat)",
+    "Lưu đoạn chat phía client (khách)",
+  ],
+};
+
+/** Nâng cấp từ gói Doanh nghiệp — giữ toàn bộ tính năng gói 3, bổ sung thêm các hạng mục sau. */
+const PLAN_ENTERPRISE_PRO: PlanDef = {
+  id: "enterprise_pro",
+  title: "Doanh nghiệp Pro",
+  blurb:
+    "Bản nâng cấp của gói Doanh nghiệp: giữ nguyên mọi tính năng gói 3, thêm dung lượng lớn hơn, lưu hội thoại tập trung và phân tích hành vi.",
+  priceLabel: "Liên hệ",
+  priceHint: "nâng cấp từ Doanh nghiệp",
+  featured: false,
+  isUpgrade: true,
+  features: [
+    "Kế thừa toàn bộ tính năng gói Doanh nghiệp (xem cột bên trái)",
+    "Giảm 5% khi mua gói chatbot orchestration nâng cao hàng tháng (theo hợp đồng)",
+    "Dung lượng tài liệu tính theo 2GB",
+    "Lưu đoạn chat vào database",
+    "Phân tích xu hướng mua hàng dựa trên các đoạn chat được lưu",
+  ],
 };
 
 function formatNumber(value: number): string {
@@ -47,11 +163,8 @@ function formatPercent(current: number, max: number): number {
   return Math.min(100, Math.max(0, (current / max) * 100));
 }
 
-function normalizePlan(plan: string): "free" | "pro" | "enterprise" {
-  if (plan === "enterprise") return "enterprise";
-  if (plan === "pro") return "pro";
-  return "free";
-}
+const PAYMENT_DISABLED_HINT =
+  "Tính năng thanh toán tự động đang phát triển — vui lòng liên hệ để đăng ký gói.";
 
 export default function BillingPage() {
   const api = useApi();
@@ -59,6 +172,11 @@ export default function BillingPage() {
   const [data, setData] = useState<BillingSummary>(FALLBACK_BILLING);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const mailtoPlans = billingMailto("[Widget Chatbot] Tư vấn gói dịch vụ");
+  const mailtoCustom = billingMailto(
+    "[Widget Chatbot] Cần gói tùy chỉnh / không có gói phù hợp",
+  );
 
   useEffect(() => {
     if (!accessToken) {
@@ -87,18 +205,38 @@ export default function BillingPage() {
   const usageStats = useMemo(() => {
     const aiCurrent = data.usage.ai_messages.current;
     const aiLimit = data.usage.ai_messages.limit;
+    const aiWindow = data.usage.ai_messages.window;
 
     const ragCurrent = data.usage.rag_storage.bytes;
     const ragLimit = data.usage.rag_storage.limit_bytes;
+    const docCount = data.usage.rag_storage.document_count;
+    const docLimit = data.usage.rag_storage.document_limit;
 
     const sqlCurrent = data.usage.sql_connections.current;
     const sqlLimit = data.usage.sql_connections.limit;
+
+    const aiPeriod =
+      aiLimit > 0
+        ? aiWindow === "month"
+          ? " / tháng"
+          : aiWindow === "day"
+            ? " / ngày"
+            : ""
+        : "";
+
+    const ragDocHint =
+      docLimit != null && docLimit > 0
+        ? ` · ${formatNumber(docCount)} / ${formatNumber(docLimit)} tài liệu`
+        : "";
 
     return [
       {
         label: "Tin nhắn AI",
         currentText: formatNumber(aiCurrent),
-        maxText: aiLimit > 0 ? formatNumber(aiLimit) : "Không giới hạn",
+        maxText:
+          aiLimit > 0
+            ? `${formatNumber(aiLimit)}${aiPeriod}`
+            : "Không giới hạn",
         percent: formatPercent(aiCurrent, aiLimit),
         icon: "chat_bubble",
         tone: "primary" as const,
@@ -106,7 +244,8 @@ export default function BillingPage() {
       {
         label: "Lưu trữ RAG",
         currentText: formatMB(ragCurrent),
-        maxText: ragLimit > 0 ? formatMB(ragLimit) : "Không giới hạn",
+        maxText:
+          (ragLimit > 0 ? formatMB(ragLimit) : "Không giới hạn") + ragDocHint,
         percent: formatPercent(ragCurrent, ragLimit),
         icon: "database",
         tone: "secondary" as const,
@@ -122,11 +261,134 @@ export default function BillingPage() {
     ];
   }, [data]);
 
-  const activePlan = normalizePlan(data.tenant.plan);
+  const activeBillingPlan = tenantPlanToBillingPlan(data.tenant.plan);
+  const invoiceRows = data.invoices;
 
-  const invoiceRows = data.invoices.length
-    ? data.invoices
-    : [{ id: "INV-DEMO-001", date: "N/A", amount: "$0.00", status: "Chưa có" }];
+  const renderPricingCard = (def: PlanDef) => {
+    const isCurrent = activeBillingPlan === def.id;
+    const showMailtoCta =
+      !isCurrent && def.id !== "free" && def.id !== "enterprise_pro";
+    const showProMailto = !isCurrent && def.id === "enterprise_pro";
+    const showFreeNonCurrent = !isCurrent && def.id === "free";
+    const proCtaLabel =
+      activeBillingPlan === "enterprise"
+        ? "Liên hệ nâng cấp lên Pro"
+        : "Liên hệ — Doanh nghiệp Pro";
+
+    const inner = (
+      <div className="bg-surface-container-lowest p-6 sm:p-8 rounded-[22px] h-full flex flex-col relative">
+        {def.isUpgrade ? (
+          <span className="absolute top-4 right-4 px-2 py-0.5 rounded-md bg-primary/15 text-primary text-[10px] font-bold uppercase tracking-wide">
+            Nâng cấp
+          </span>
+        ) : null}
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-on-surface mb-2 pr-16">
+            {def.title}
+          </h3>
+          <p className="text-on-surface-variant text-sm min-h-[2.75rem] leading-relaxed">
+            {def.blurb}
+          </p>
+          <div className="mt-4 flex items-baseline gap-1 flex-wrap">
+            <span
+              className={`text-3xl sm:text-4xl font-extrabold ${
+                def.featured ? "text-primary" : "text-on-surface"
+              }`}
+            >
+              {def.priceLabel}
+            </span>
+            {def.priceHint ? (
+              <span className="text-on-surface-variant text-sm">
+                {def.priceHint}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <ul className="text-sm text-on-surface-variant space-y-2.5 mb-8 flex-1 list-none pl-0">
+          {def.features.map((line) => (
+            <li key={line} className="flex gap-2">
+              <span className="material-symbols-outlined text-primary text-[18px] shrink-0">
+                check_circle
+              </span>
+              <span className="leading-snug">{line}</span>
+            </li>
+          ))}
+        </ul>
+        {isCurrent ? (
+          <button
+            type="button"
+            disabled
+            className="mt-auto w-full py-3 px-6 rounded-full border-2 border-primary/40 text-primary font-semibold opacity-90 cursor-default"
+          >
+            Gói hiện tại
+          </button>
+        ) : def.id === "enterprise" ? (
+          <a
+            href={mailtoPlans}
+            className="mt-auto w-full py-3 px-6 rounded-full text-center bg-primary text-on-primary font-bold shadow-lg shadow-primary/30 hover:opacity-90"
+          >
+            Liên hệ — Doanh nghiệp
+          </a>
+        ) : showMailtoCta ? (
+          <a
+            href={mailtoPlans}
+            className="mt-auto w-full py-3 px-6 rounded-full text-center border-2 border-primary text-primary font-semibold hover:bg-primary/5"
+          >
+            Liên hệ — {def.title}
+          </a>
+        ) : showProMailto ? (
+          <a
+            href={mailtoPlans}
+            className="mt-auto w-full py-3 px-6 rounded-full text-center border-2 border-primary/40 text-primary font-semibold hover:bg-primary/10"
+          >
+            {proCtaLabel}
+          </a>
+        ) : showFreeNonCurrent ? (
+          <button
+            type="button"
+            disabled
+            title={PAYMENT_DISABLED_HINT}
+            className="mt-auto w-full py-3 px-6 rounded-full border-2 border-outline-variant text-on-surface font-semibold opacity-50 cursor-not-allowed"
+          >
+            Chọn Miễn phí
+          </button>
+        ) : null}
+      </div>
+    );
+
+    if (def.featured) {
+      return (
+        <div
+          key={def.id}
+          className={`p-[2px] rounded-2xl shadow-xl relative h-full flex flex-col ${
+            isCurrent
+              ? "bg-primary shadow-primary/25"
+              : "bg-outline-variant/35 shadow-black/10"
+          }`}
+        >
+          {inner}
+          <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-tertiary text-on-tertiary text-[10px] font-bold uppercase tracking-wide z-10">
+            Phổ biến
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={def.id}
+        className={`rounded-2xl border flex flex-col transition-all hover:translate-y-[-2px] h-full ${
+          def.isUpgrade
+            ? "border-primary/25 bg-primary/5"
+            : isCurrent
+              ? "border-primary/50 shadow-md"
+              : "border-outline-variant/10"
+        }`}
+      >
+        {inner}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -202,91 +464,54 @@ export default function BillingPage() {
       <section className="mb-20">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <h2 className="text-3xl font-extrabold text-on-surface mb-3">
-            Nâng tầm trải nghiệm AI của bạn
+            Chọn gói phù hợp
           </h2>
           <p className="text-on-surface-variant">
-            Chọn gói dịch vụ phù hợp để mở khóa các tính năng nâng cao và tối ưu
-            hóa quy trình làm việc.
+            So sánh tính năng theo nhu cầu. Thanh toán tự động sẽ bật khi tích
+            hợp cổng thu phí; hiện tại vui lòng liên hệ để đăng ký hoặc nâng cấp
+            gói.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-          <div
-            className={`bg-surface-container-lowest p-8 rounded-2xl border flex flex-col transition-all hover:translate-y-[-4px] ${
-              activePlan === "free"
-                ? "border-primary/40"
-                : "border-outline-variant/10"
-            }`}
-          >
-            <div className="mb-8">
-              <h3 className="text-xl font-bold text-on-surface mb-2">Free</h3>
-              <p className="text-on-surface-variant text-sm h-10">
-                Dành cho cá nhân bắt đầu tìm hiểu về AI.
-              </p>
-              <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-4xl font-extrabold text-on-surface">
-                  $0
-                </span>
-                <span className="text-on-surface-variant">/tháng</span>
-              </div>
-            </div>
-            <button className="mt-auto w-full py-3 px-6 rounded-full border-2 border-outline-variant text-on-surface font-semibold hover:bg-surface-container transition-colors">
-              {activePlan === "free" ? "Gói hiện tại" : "Chọn Free"}
-            </button>
-          </div>
+        <p className="text-center text-xs text-on-surface-variant max-w-xl mx-auto mb-8">
+          {PAYMENT_DISABLED_HINT}
+        </p>
 
-          <div
-            className={`p-[2px] rounded-2xl shadow-2xl relative ${
-              activePlan === "pro"
-                ? "bg-primary shadow-primary/20"
-                : "bg-outline-variant/30 shadow-black/10"
-            }`}
-          >
-            <div className="bg-surface-container-lowest p-8 rounded-[22px] h-full flex flex-col">
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-on-surface mb-2">Pro</h3>
-                <p className="text-on-surface-variant text-sm h-10">
-                  Giải pháp chuyên nghiệp cho doanh nghiệp vừa và nhỏ.
-                </p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold text-primary">
-                    $49
-                  </span>
-                  <span className="text-on-surface-variant">/tháng</span>
-                </div>
-              </div>
-              <button className="mt-auto w-full py-3 px-6 rounded-full bg-primary text-on-primary font-bold shadow-lg shadow-primary/30 hover:opacity-90 transition-all">
-                {activePlan === "pro" ? "Gói hiện tại" : "Nâng cấp lên Pro"}
-              </button>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 items-stretch">
+          {PLAN_FREE_BASIC.map((def) => renderPricingCard(def))}
 
-          <div
-            className={`bg-surface-container-lowest p-8 rounded-2xl border flex flex-col transition-all hover:translate-y-[-4px] ${
-              activePlan === "enterprise"
-                ? "border-primary/40"
-                : "border-outline-variant/10"
-            }`}
-          >
-            <div className="mb-8">
-              <h3 className="text-xl font-bold text-on-surface mb-2">
-                Enterprise
-              </h3>
-              <p className="text-on-surface-variant text-sm h-10">
-                Quy mô lớn với yêu cầu bảo mật và hiệu suất tối đa.
+          <div className="md:col-span-2 xl:col-span-2 rounded-2xl border border-outline-variant/15 bg-surface-container-low/40 p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-2 mb-4 text-center">
+              <span className="material-symbols-outlined text-primary hidden sm:inline text-[22px]">
+                trending_up
+              </span>
+              <p className="text-sm font-semibold text-on-surface leading-snug">
+                <span className="text-primary">Doanh nghiệp Pro</span> là bản{" "}
+                <span className="font-bold">nâng cấp</span> của{" "}
+                <span className="font-bold">Doanh nghiệp</span> — không thay thế
+                gói 3; bạn giữ toàn bộ tính năng gói Doanh nghiệp và bổ sung thêm
+                các hạng mục trong cột Pro.
               </p>
-              <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-3xl font-extrabold text-on-surface">
-                  Tùy chỉnh
-                </span>
-              </div>
             </div>
-            <button className="mt-auto w-full py-3 px-6 rounded-full border-2 border-primary text-primary font-semibold hover:bg-primary/5 transition-colors">
-              {activePlan === "enterprise"
-                ? "Gói hiện tại"
-                : "Liên hệ kinh doanh"}
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
+              {renderPricingCard(PLAN_ENTERPRISE)}
+              {renderPricingCard(PLAN_ENTERPRISE_PRO)}
+            </div>
           </div>
+        </div>
+
+        <div className="mt-12 max-w-xl mx-auto text-center">
+          <p className="text-sm text-on-surface-variant mb-4">
+            Không thấy gói phù hợp? Chúng tôi có thể thiết kế gói tùy chỉnh theo
+            quy mô và tích hợp của bạn.
+          </p>
+          <a
+            href={mailtoCustom}
+            className="inline-flex items-center gap-2 bg-surface-container-high text-on-surface px-6 py-3 rounded-full font-bold text-sm border border-outline-variant/20 hover:border-primary/30"
+          >
+            <span className="material-symbols-outlined text-[20px]">mail</span>
+            Liên hệ tư vấn
+          </a>
         </div>
       </section>
 
@@ -296,14 +521,18 @@ export default function BillingPage() {
             <h2 className="text-xl font-bold text-on-surface">
               Phương thức thanh toán
             </h2>
-            <button className="text-primary font-semibold text-sm hover:underline">
+            <button
+              type="button"
+              disabled
+              title={PAYMENT_DISABLED_HINT}
+              className="text-primary font-semibold text-sm opacity-50 cursor-not-allowed"
+            >
               Thêm thẻ mới
             </button>
           </div>
           <div className="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant/10 shadow-sm">
             <p className="text-sm text-on-surface-variant">
-              Chưa có dữ liệu phương thức thanh toán từ backend. Kết nối
-              Stripe/Payment Provider để hiển thị thẻ thật.
+              Chưa có dữ liệu phương thức thanh toán. {PAYMENT_DISABLED_HINT}
             </p>
           </div>
         </section>
@@ -333,25 +562,37 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/5">
-                {invoiceRows.map((inv, idx) => (
-                  <tr
-                    key={idx}
-                    className="hover:bg-surface-container-low/30 transition-colors"
-                  >
-                    <td className="px-6 py-4 text-sm font-semibold text-on-surface">
-                      {String(inv.id || "N/A")}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-on-surface-variant">
-                      {String(inv.date || "N/A")}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-on-surface">
-                      {String(inv.amount || "$0.00")}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-on-surface-variant">
-                      {String(inv.status || "N/A")}
+                {invoiceRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-6 py-10 text-sm text-on-surface-variant text-center"
+                    >
+                      Chưa có hóa đơn từ backend. Lịch sử giao dịch sẽ hiển thị
+                      khi đã tích hợp cổng thanh toán.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  invoiceRows.map((inv, idx) => (
+                    <tr
+                      key={idx}
+                      className="hover:bg-surface-container-low/30 transition-colors"
+                    >
+                      <td className="px-6 py-4 text-sm font-semibold text-on-surface">
+                        {String(inv.id ?? "N/A")}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-on-surface-variant">
+                        {String(inv.date ?? "N/A")}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-on-surface">
+                        {String(inv.amount ?? "—")}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-on-surface-variant">
+                        {String(inv.status ?? "N/A")}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

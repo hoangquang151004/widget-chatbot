@@ -77,8 +77,6 @@ Nếu gặp lỗi `ModuleNotFoundError: No module named 'db'`, hãy chắc chắ
 
 ```bash
 cd apps/web
-npm install
-# Cấu hình .env.local
 npm run dev
 ```
 
@@ -88,6 +86,11 @@ npm run dev
 cd apps/widget-sdk
 npm install
 npm run dev
+```
+### 4. code tạo super user
+```bash
+.\.venv\Scripts\python.exe scripts\create_platform_admin.py --email admin123@gmail.com --password '12345678'
+Đã tạo platform admin: admin123@gmail.com (id=1f71c460-ccca-4d58-8d41-45912e403e8a)
 ```
 
 ---

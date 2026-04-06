@@ -95,6 +95,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
             request.state.tenant_id = str(tenant.id)
             request.state.tenant_name = tenant.name
+            request.state.user_role = tenant.role
             request.state.is_admin = True
 
         return await call_next(request)

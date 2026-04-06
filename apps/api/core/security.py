@@ -44,12 +44,13 @@ class SecurityUtils:
         return f"{prefix}_{secrets.token_urlsafe(32)}"
 
     @classmethod
-    def generate_admin_token(cls, tenant_id: str, email: str) -> str:
+    def generate_admin_token(cls, tenant_id: str, email: str, role: str = "tenant") -> str:
         """Generate a signed bearer token for admin dashboard sessions."""
         header = {"alg": "HS256", "typ": "JWT"}
         payload = {
             "sub": tenant_id,
             "email": email,
+            "role": role,
             "type": "admin",
             "exp": int(time.time()) + int(settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
         }

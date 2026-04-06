@@ -26,6 +26,11 @@ const menuItems = [
     href: "/dashboard/settings",
   },
   {
+    label: "Domain cho widget",
+    icon: "public",
+    href: "/dashboard/origins",
+  },
+  {
     label: "Khóa API",
     icon: "vpn_key",
     href: "/dashboard/keys",
@@ -36,6 +41,15 @@ const menuItems = [
     href: "/dashboard/billing",
   },
 ];
+
+function formatPlanLabel(plan: string | undefined): string {
+  const p = (plan || "starter").toLowerCase();
+  if (p === "enterprise_pro") return "Enterprise Pro";
+  if (p === "enterprise") return "Enterprise";
+  if (p === "pro") return "Pro";
+  if (p === "starter") return "Miễn phí";
+  return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "Miễn phí";
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -85,9 +99,9 @@ export default function Sidebar() {
       </nav>
 
       <div className="mt-auto pt-4 border-t border-slate-200">
-        <button className="w-full bg-primary/10 text-primary py-3 px-4 rounded-full text-[11px] font-bold mb-4 active:scale-[0.98] duration-150 border border-primary/20">
-          Gói: Professional
-        </button>
+        <div className="w-full bg-primary/10 text-primary py-3 px-4 rounded-full text-[11px] font-bold mb-4 border border-primary/20 text-center">
+          Gói: {formatPlanLabel(tenant?.plan)}
+        </div>
         <Link
           href="/dashboard/support"
           className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:text-indigo-600 text-[13px] font-medium"

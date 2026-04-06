@@ -1,11 +1,25 @@
 import pytest
 import asyncio
 import uuid
+
 from ai.vector_store import SaaSVectorStore
-from ai.rag_agent import RAGAgent
+from core.config import settings
+
 
 @pytest.mark.asyncio
 async def test_tenant_data_isolation():
+    try:
+        from qdrant_client import AsyncQdrantClient
+
+        qc = AsyncQdrantClient(
+            host=settings.QDRANT_HOST,
+            port=settings.QDRANT_PORT,
+            timeout=3,
+        )
+        await qc.get_collections()
+    except Exception as exc:
+        pytest.skip(f"Qdrant không khả dụng: {exc}")
+
     tenant_a = str(uuid.uuid4())
     tenant_b = str(uuid.uuid4())
     

@@ -2,16 +2,22 @@ import os
 import shutil
 import logging
 from typing import List
-from fastapi import APIRouter, Request, UploadFile, File, HTTPException
-from sqlalchemy.future import select
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
+from sqlalchemy import func, select
+
+from core.plan_limits import get_limits, normalize_plan
 from db.session import async_session
 from models.document import TenantDocument
+from models.tenant import Tenant
 from ai.rag.processor import DocumentProcessor
 from worker.tasks.document_tasks import process_document_task
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from uuid import UUID
+
 from core.config import settings
+from core.deps import require_tenant_account
 
 router = APIRouter()
 
@@ -28,7 +34,7 @@ class DocumentInfo(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
-@router.post("/upload", response_model=DocumentInfo)
+@router.post("/upload", response_model=DocumentInfo, dependencies=[Depends(require_tenant_account)])
 async def upload_document(
     request: Request, 
     file: UploadFile = File(...)
@@ -55,11 +61,46 @@ async def upload_document(
         shutil.copyfileobj(file.file, buffer)
 
     file_size = os.path.getsize(storage_path)
-    
+
+    tenant_uuid = UUID(tenant_id)
+    async with async_session() as session:
+        tenant_row = await session.get(Tenant, tenant_uuid)
+        plan_key = normalize_plan(tenant_row.plan if tenant_row else None)
+        lim = get_limits(plan_key)
+
+        doc_stats = await session.execute(
+            select(
+                func.coalesce(func.sum(TenantDocument.file_size), 0),
+                func.count(TenantDocument.id),
+            ).where(TenantDocument.tenant_id == tenant_uuid)
+        )
+        total_bytes, doc_count = doc_stats.one()
+        total_bytes = int(total_bytes or 0)
+        doc_count = int(doc_count or 0)
+
+        if lim.max_documents is not None and doc_count >= lim.max_documents:
+            try:
+                os.remove(storage_path)
+            except OSError:
+                pass
+            raise HTTPException(
+                status_code=403,
+                detail=f"Gói hiện tại chỉ cho phép tối đa {lim.max_documents} tài liệu RAG.",
+            )
+        if lim.rag_storage_bytes and total_bytes + file_size > lim.rag_storage_bytes:
+            try:
+                os.remove(storage_path)
+            except OSError:
+                pass
+            raise HTTPException(
+                status_code=403,
+                detail="Đã vượt dung lượng lưu trữ tài liệu theo gói đăng ký.",
+            )
+
     # 3. Create database record
     async with async_session() as session:
         new_doc = TenantDocument(
-            tenant_id=tenant_id,
+            tenant_id=tenant_uuid,
             filename=file.filename,
             file_type=file.content_type or "application/octet-stream",
             file_size=file_size,
@@ -81,7 +122,7 @@ async def upload_document(
         
         return new_doc
 
-@router.get("/list", response_model=List[DocumentInfo])
+@router.get("/list", response_model=List[DocumentInfo], dependencies=[Depends(require_tenant_account)])
 async def list_documents(request: Request):
     """List all documents for the current tenant."""
     if not getattr(request.state, "is_admin", False):
@@ -97,7 +138,7 @@ async def list_documents(request: Request):
         documents = result.scalars().all()
         return documents
 
-@router.delete("/{doc_id}")
+@router.delete("/{doc_id}", dependencies=[Depends(require_tenant_account)])
 async def delete_document(doc_id: UUID, request: Request):
     """Delete a document from DB and Vector Store."""
     if not getattr(request.state, "is_admin", False):
@@ -125,7 +166,7 @@ async def delete_document(doc_id: UUID, request: Request):
         
         return {"message": f"Successfully deleted document {doc.filename}"}
 
-@router.get("/status/{doc_id}", response_model=DocumentInfo)
+@router.get("/status/{doc_id}", response_model=DocumentInfo, dependencies=[Depends(require_tenant_account)])
 async def get_document_status(doc_id: UUID, request: Request):
     """Check the status of a specific document."""
     if not getattr(request.state, "is_admin", False):

@@ -9,11 +9,14 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
+export type AccountRole = "tenant" | "platform_admin";
+
 interface Tenant {
   id: string;
   name: string;
   email: string;
-  plan: "starter" | "pro" | "enterprise";
+  plan: "starter" | "pro" | "enterprise" | "enterprise_pro";
+  role: AccountRole;
   public_key: string | null;
   widget: WidgetConfig;
   ai_settings: AiSettings;
@@ -105,9 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(data.access_token);
         localStorage.setItem("access_token", data.access_token);
 
-        // Verify to get full tenant info
         await verifyToken(data.access_token);
-        router.push("/dashboard");
+        const role = (data.role || "tenant") as AccountRole;
+        if (role === "platform_admin") {
+          router.push("/admin");
+        } else {
+          router.push("/dashboard");
+        }
         return true;
       }
       return false;

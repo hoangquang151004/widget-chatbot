@@ -125,6 +125,16 @@ async def request_logging_middleware(request: Request, call_next):
 
     response.headers["X-Process-Time"] = f"{duration_ms}ms"
     response.headers["X-Request-ID"]   = request_id
+    if settings.ENV == "production":
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin"
+        )
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "camera=(), microphone=(), geolocation=()",
+        )
     return response
 
 

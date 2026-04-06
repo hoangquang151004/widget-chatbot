@@ -259,7 +259,16 @@ Ghi nhận 2026-04-03 (browser flow tự động, headless):
 
 ---
 
-### 5.11 — Kiểm tra Alembic History
+### 5.11 — Text-to-SQL: Admin DB + schema introspection (pytest)
+
+- [x] Một luồng tích hợp async (`httpx` + `ASGITransport`): register/login → `GET/POST /api/v1/admin/database` → test kết nối (thành công + sai mật khẩu) → `get_schema(..., force_refresh=True)` có `tables` và không có `error`.
+
+File: `apps/api/tests/test_admin_database_integration.py`  
+Smoke cục bộ: `apps/api/scripts/run_smoke_integration.py`
+
+---
+
+### 5.12 — Kiểm tra Alembic History
 
 ```bash
 cd apps/api
@@ -267,7 +276,7 @@ cd apps/api
 # Phải thấy 2 revisions: drop_old + create_new
 ```
 
-### 5.12 — Verify cleanup legacy columns (bắt buộc)
+### 5.13 — Verify cleanup legacy columns (bắt buộc)
 
 - [x] Chạy migration head sau cleanup:
 
@@ -303,6 +312,7 @@ Kết quả verify 2026-04-03:
 
 **Backend:**
 
+- [x] Regression Text-to-SQL schema (introspection thật sau khi lưu `tenant_databases`) — `tests/test_admin_database_integration.py`
 - [x] Tất cả 10 bảng lõi tồn tại trong DB
 - [x] Register tạo đủ 4 records (tenant, widget_config, ai_settings, 2 keys)
 - [x] Middleware validate key qua bảng `tenant_keys`

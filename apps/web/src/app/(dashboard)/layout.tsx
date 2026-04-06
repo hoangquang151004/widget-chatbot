@@ -11,7 +11,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { accessToken, isLoading } = useAuth();
+  const { accessToken, tenant, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -19,6 +19,12 @@ export default function DashboardLayout({
       router.push("/login");
     }
   }, [accessToken, isLoading, router]);
+
+  useEffect(() => {
+    if (!isLoading && accessToken && tenant?.role === "platform_admin") {
+      router.replace("/admin");
+    }
+  }, [accessToken, tenant?.role, isLoading, router]);
 
   if (isLoading) {
     return (
@@ -34,6 +40,7 @@ export default function DashboardLayout({
   }
 
   if (!accessToken) return null;
+  if (tenant?.role === "platform_admin") return null;
 
   return (
     <div className="min-h-screen bg-surface">

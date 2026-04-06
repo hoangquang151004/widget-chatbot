@@ -17,6 +17,7 @@ MOCK_TENANT = Tenant(
     email="mock@example.com",
     password_hash="hashed_password",
     plan="starter",
+    role="tenant",
     is_active=True,
 )
 

@@ -1,80 +1,53 @@
 """
-B-008: Unit tests cho SQL Sanitizer và Admin endpoints.
-Chạy: cd apps/api && .venv\Scripts\python.exe -m pytest tests/test_backend.py -v
+B-008: Unit tests cho SQL validator và Admin helpers.
+Chạy: cd apps/api; .venv/Scripts/python -m pytest tests/test_backend.py -v
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from ai.sql_agent import SQLAgent
+
+from ai.sql.executor import _validate_sql
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test SQL Sanitizer (B-008)
+# Test SQL validation (executor pipeline; LIMIT do LLM/generator)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestSQLSanitizer:
-    def setup_method(self):
-        self.agent = SQLAgent.__new__(SQLAgent)
-        self.agent.tenant_id = "test-tenant"
-
+class TestSQLValidate:
     def test_valid_select(self):
-        """SELECT hợp lệ phải pass."""
         sql = "SELECT id, name FROM users"
-        result = self.agent._sanitize_sql(sql)
-        assert "SELECT" in result.upper()
-
-    def test_auto_limit_added(self):
-        """Nếu không có LIMIT, phải tự thêm LIMIT 100."""
-        sql = "SELECT * FROM products"
-        result = self.agent._sanitize_sql(sql)
-        assert "LIMIT 100" in result.upper()
-
-    def test_existing_limit_preserved(self):
-        """Nếu đã có LIMIT, không được thêm lần nữa."""
-        sql = "SELECT * FROM products LIMIT 10"
-        result = self.agent._sanitize_sql(sql)
-        assert result.upper().count("LIMIT") == 1
+        _validate_sql(sql)
 
     def test_drop_blocked(self):
-        """DROP phải bị chặn."""
-        with pytest.raises(ValueError, match="Dangerous keyword"):
-            self.agent._sanitize_sql("DROP TABLE users")
+        with pytest.raises(ValueError, match="cấm"):
+            _validate_sql("DROP TABLE users")
 
     def test_delete_blocked(self):
-        """DELETE phải bị chặn."""
-        with pytest.raises(ValueError, match="Dangerous keyword"):
-            self.agent._sanitize_sql("DELETE FROM users WHERE 1=1")
+        with pytest.raises(ValueError, match="cấm"):
+            _validate_sql("DELETE FROM users WHERE 1=1")
 
     def test_update_blocked(self):
-        """UPDATE phải bị chặn."""
-        with pytest.raises(ValueError, match="Dangerous keyword"):
-            self.agent._sanitize_sql("UPDATE users SET name='x'")
+        with pytest.raises(ValueError, match="cấm"):
+            _validate_sql("UPDATE users SET name='x'")
 
     def test_insert_blocked(self):
-        """INSERT phải bị chặn."""
-        with pytest.raises(ValueError, match="Dangerous keyword"):
-            self.agent._sanitize_sql("INSERT INTO users VALUES (1, 'a')")
+        with pytest.raises(ValueError, match="cấm"):
+            _validate_sql("INSERT INTO users VALUES (1, 'a')")
 
     def test_truncate_blocked(self):
-        """TRUNCATE phải bị chặn."""
-        with pytest.raises(ValueError, match="Dangerous keyword"):
-            self.agent._sanitize_sql("TRUNCATE TABLE users")
+        with pytest.raises(ValueError, match="cấm"):
+            _validate_sql("TRUNCATE TABLE users")
 
     def test_non_select_blocked(self):
-        """Statement không bắt đầu bằng SELECT phải bị từ chối."""
-        with pytest.raises(ValueError, match="Only SELECT"):
-            self.agent._sanitize_sql("EXEC sp_dangerous")
+        with pytest.raises(ValueError, match="cấm"):
+            _validate_sql("EXEC sp_dangerous")
 
-    def test_comment_stripped(self):
-        """SQL comment phải bị loại bỏ trước khi validate."""
+    def test_comment_line_ignored_for_ddl(self):
+        """Comment sau -- không được coi là câu DDL thực thi."""
         sql = "SELECT * FROM users -- DROP TABLE users"
-        result = self.agent._sanitize_sql(sql)
-        assert "DROP" not in result.upper()
+        _validate_sql(sql)
 
-    def test_multiline_comment_stripped(self):
-        """Block comment phải bị loại bỏ."""
+    def test_multiline_comment_no_false_delete(self):
         sql = "SELECT * FROM users /* DELETE FROM users */"
-        result = self.agent._sanitize_sql(sql)
-        assert "DELETE" not in result.upper()
+        _validate_sql(sql)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

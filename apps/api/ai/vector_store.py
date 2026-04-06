@@ -8,9 +8,12 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    Fusion,
+    FusionQuery,
     MatchValue,
     Modifier,
     PointStruct,
+    Prefetch,
     SparseVector as QdrantSparseVector,
     SparseVectorParams,
     VectorParams,
@@ -138,12 +141,32 @@ class SaaSVectorStore:
         )
         logger.info("Upserted %s points for tenant %s", len(points), self.tenant_id)
 
-    async def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search using dense vectors with strict tenant isolation."""
-        client = await self.get_client()
-        dense_vec = await gemini_manager.aget_embeddings(query)
-        tenant_filter = self._get_tenant_filter()
+    def _hits_from_scored_points(
+        self, points: list, apply_cosine_threshold: bool
+    ) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for hit in points:
+            score = hit.score if hit.score is not None else 0.0
+            if apply_cosine_threshold and score < settings.RAG_SIMILARITY_THRESHOLD:
+                continue
+            payload = hit.payload or {}
+            out.append(
+                {
+                    "id": hit.id,
+                    "score": score,
+                    "text": payload.get("text", ""),
+                    "metadata": payload,
+                }
+            )
+        return out
 
+    async def _dense_only_search(
+        self,
+        client: AsyncQdrantClient,
+        dense_vec: List[float],
+        tenant_filter: Filter,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
         try:
             results = await client.search(
                 collection_name=self.collection_name,
@@ -151,7 +174,6 @@ class SaaSVectorStore:
                 query_filter=tenant_filter,
                 limit=limit,
             )
-
             return [
                 {
                     "id": hit.id,
@@ -163,8 +185,61 @@ class SaaSVectorStore:
                 if hit.score >= settings.RAG_SIMILARITY_THRESHOLD
             ]
         except Exception as e:
-            logger.error("Search failed: %s", str(e))
+            logger.error("Dense-only search failed: %s", str(e))
             return []
+
+    async def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Hybrid search: dense + BM25 (RRF); fallback dense-only nếu sparse rỗng hoặc lỗi."""
+        client = await self.get_client()
+        dense_vec = await gemini_manager.aget_embeddings(
+            query, task_type="RETRIEVAL_QUERY"
+        )
+        tenant_filter = self._get_tenant_filter()
+        sparse_model = self.get_sparse_model()
+        sparse_results = list(sparse_model.embed([query]))
+        sparse_vec = sparse_results[0]
+        prefetch_limit = max(limit * 3, 15)
+
+        if len(sparse_vec.indices) == 0:
+            return await self._dense_only_search(
+                client, dense_vec, tenant_filter, limit
+            )
+
+        try:
+            qres = await client.query_points(
+                collection_name=self.collection_name,
+                prefetch=[
+                    Prefetch(
+                        query=dense_vec,
+                        using="gemini-dense",
+                        filter=tenant_filter,
+                        limit=prefetch_limit,
+                    ),
+                    Prefetch(
+                        query=QdrantSparseVector(
+                            indices=sparse_vec.indices.tolist(),
+                            values=sparse_vec.values.tolist(),
+                        ),
+                        using="bm25",
+                        filter=tenant_filter,
+                        limit=prefetch_limit,
+                    ),
+                ],
+                query=FusionQuery(fusion=Fusion.RRF),
+                limit=limit,
+                with_payload=True,
+            )
+            # Điểm RRF không tương đương cosine; không áp RAG_SIMILARITY_THRESHOLD
+            return self._hits_from_scored_points(
+                list(qres.points), apply_cosine_threshold=False
+            )
+        except Exception as e:
+            logger.error(
+                "Hybrid search failed: %s. Falling back to dense-only.", str(e)
+            )
+            return await self._dense_only_search(
+                client, dense_vec, tenant_filter, limit
+            )
 
     async def delete_by_source(self, filename: str):
         """Delete all points for a source filename of current tenant."""

@@ -14,6 +14,7 @@ from sqlalchemy.future import select
 from ai.llm import gemini_manager
 from ai.memory import RedisConversationMemory
 from ai.orchestrator import orchestrator_graph
+from api.v1.plan_enforcement import ensure_widget_chat_allowed
 from db.session import async_session
 from models.allowed_origin import TenantAllowedOrigin
 from models.chat import ChatMessage, ChatSession
@@ -239,11 +240,13 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     """Main chat endpoint — LangGraph Orchestrator."""
     tenant_id = request.state.tenant_id
     query = body.query
-    session_id = body.session_id
+    session_id = body.session_id or "default"
 
     logger.info("Chat request: tenant=%s, session=%s", tenant_id, session_id)
 
     try:
+        await ensure_widget_chat_allowed(tenant_id)
+
         inputs = {
             "query": query,
             "tenant_id": tenant_id,
@@ -257,6 +260,16 @@ async def chat_endpoint(request: Request, body: ChatRequest):
 
         if not agent_response:
             raise HTTPException(status_code=500, detail="AI Agent không tạo được phản hồi.")
+
+        await _persist_stream_messages_best_effort(
+            tenant_id=tenant_id,
+            session_id=session_id,
+            query=query,
+            response_text=agent_response.content or "",
+            response_metadata=agent_response.metadata
+            if isinstance(agent_response.metadata, dict)
+            else {},
+        )
 
         return {
             "content": agent_response.content,
@@ -286,6 +299,8 @@ async def chat_stream_endpoint(
 
     logger.info("Stream request: tenant=%s, session=%s", tenant_id, session_id)
 
+    await ensure_widget_chat_allowed(tenant_id)
+
     return StreamingResponse(
         _stream_gemini(tenant_id, session_id, query.strip()),
         media_type="text/event-stream",
@@ -302,6 +317,8 @@ async def chat_stream_post_endpoint(request: Request, body: ChatRequest):
     tenant_id = request.state.tenant_id
     query = body.query
     session_id = body.session_id or "default"
+
+    await ensure_widget_chat_allowed(tenant_id)
 
     async def event_stream():
         yield f"data: {json.dumps({'chunk': '', 'done': False}, ensure_ascii=False)}\n\n"

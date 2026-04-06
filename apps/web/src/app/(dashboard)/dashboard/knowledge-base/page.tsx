@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useApi } from "@/hooks/useApi";
 
 type DocumentInfo = {
   id: string;
@@ -12,7 +13,6 @@ type DocumentInfo = {
   uploaded_at: string;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const STORAGE_LIMIT_BYTES = 50 * 1024 * 1024 * 1024;
 
 function formatFileSize(bytes: number): string {
@@ -51,6 +51,7 @@ function getStatusMeta(status: string): { label: string; className: string } {
 
 export default function KnowledgeBasePage() {
   const { accessToken } = useAuth();
+  const api = useApi();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
@@ -67,18 +68,10 @@ export default function KnowledgeBasePage() {
     if (showLoading) setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/files/list`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Không thể tải danh sách tài liệu.");
-      }
-
-      const data: DocumentInfo[] = await response.json();
-      setDocuments(data);
+      const data = (await api.get(
+        "/api/v1/files/list",
+      )) as DocumentInfo[];
+      setDocuments(Array.isArray(data) ? data : []);
     } catch (err) {
       setError((err as Error).message || "Lỗi kết nối backend.");
     } finally {
@@ -119,18 +112,7 @@ export default function KnowledgeBasePage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch(`${API_URL}/api/v1/files/upload`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data?.detail || "Upload thất bại.");
-      }
+      await api.postFormData("/api/v1/files/upload", formData);
 
       setSuccess("Tải lên thành công. Hệ thống đang xử lý tài liệu.");
       await loadDocuments(false);
@@ -156,17 +138,7 @@ export default function KnowledgeBasePage() {
     setSuccess(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/files/${doc.id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data?.detail || "Không thể xóa tài liệu.");
-      }
+      await api.del(`/api/v1/files/${doc.id}`);
 
       setSuccess(`Đã xóa ${doc.filename}.`);
       await loadDocuments(false);

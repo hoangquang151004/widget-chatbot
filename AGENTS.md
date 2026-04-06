@@ -41,9 +41,11 @@
 - Chạy `alembic upgrade head` sau khi tạo migration mới.
 
 ### 2.5 Frontend
-- Tất cả API call phải dùng hook `useApi` ở `apps/web/src/hooks/useApi.ts`.
+- Tất cả API call phải dùng hook `useApi` ở `apps/web/src/hooks/useApi.ts` (upload `multipart/form-data` có thể cần mở rộng hook thay vì `fetch` thuần).
 - Auth context: `apps/web/src/context/AuthContext.tsx`.
 - Không hardcode mock data trong pages production.
+- **Phase 6 (sản phẩm):** Hoàn thiện các trang dashboard còn thiếu / placeholder — xem `PROGRESS.md` (Phase 6) và `tasks/task_phase_6.md`; trước khi code Phase 6, cập nhật `task.md` theo checklist đó.
+- **Gói dịch vụ (Billing):** Trang `dashboard/billing` hiển thị 4 gói **Miễn phí, Cơ bản, Doanh nghiệp, Doanh nghiệp Pro** (copy chi tiết trong `tasks/task_billing_plans.md`). Mapping hiển thị “gói hiện tại” từ `tenant.plan`: `starter` → Miễn phí, `pro` → Cơ bản, `enterprise` → Doanh nghiệp; **Doanh nghiệp Pro** chưa có giá trị DB riêng (cần mở rộng schema nếu enforce). CTA **Liên hệ** dùng `NEXT_PUBLIC_SUPPORT_EMAIL` (có thể tách `NEXT_PUBLIC_SALES_EMAIL` sau).
 
 ---
 
@@ -71,9 +73,10 @@ tenants                    ← Core account (email, password, plan)
 |--------|------|-------|
 | POST | `/api/v1/admin/register` | Đăng ký tenant mới |
 | POST | `/api/v1/admin/login` | Đăng nhập → Bearer token |
-| GET | `/api/v1/admin/me` | Thông tin tenant |
-| PATCH | `/api/v1/admin/widget` | Cập nhật cấu hình widget |
-| PATCH | `/api/v1/admin/ai-settings` | Cập nhật cài đặt AI |
+| GET | `/api/v1/admin/me` | Thông tin tenant (+ `widget`, `ai_settings`, `public_key`) |
+| PATCH | `/api/v1/admin/me` | Cập nhật gộp: tên tenant, widget, AI settings (dashboard Settings dùng endpoint này) |
+| PATCH | `/api/v1/admin/widget` | Cập nhật chỉ cấu hình widget |
+| PATCH | `/api/v1/admin/ai-settings` | Cập nhật chỉ cài đặt AI |
 | GET | `/api/v1/admin/keys` | Danh sách API keys |
 | POST | `/api/v1/admin/keys` | Tạo key mới |
 | DELETE | `/api/v1/admin/keys/{id}` | Xóa/thu hồi key |
@@ -83,7 +86,7 @@ tenants                    ← Core account (email, password, plan)
 | GET | `/api/v1/admin/database` | Lấy DB config |
 | POST | `/api/v1/admin/database` | Lưu DB config |
 | POST | `/api/v1/admin/database/test` | Test kết nối |
-| GET | `/api/v1/admin/billing/summary` | Billing stats |
+| GET | `/api/v1/admin/billing/summary` | Billing: usage + hạn mức theo `tenants.plan` (tin nhắn user theo tháng/ngày, RAG byte + `document_limit`, SQL) |
 
 ### Widget/Public Routes (API Key required)
 | Method | Path | Mô tả |
@@ -145,8 +148,10 @@ npm run dev
 
 | File | Vai trò |
 |------|---------|
-| `PROGRESS.md` | Trạng thái tổng thể các Phase migration |
-| `tasks/task_phase_*.md` | Chi tiết tasks từng Phase |
+| `PROGRESS.md` | Trạng thái tổng thể các Phase (kèm Phase 6 — hoàn thiện dashboard) |
+| `tasks/task_phase_*.md` | Chi tiết tasks từng Phase (`task_phase_6.md` = backlog UI sản phẩm) |
+| `tasks/task_billing_plans.md` | Định nghĩa gói billing + checklist backend/migration |
+| `task.md` | Task list đang làm (đồng bộ với Phase hiện tại trong `PROGRESS.md`) |
 | `apps/api/.env` | Biến môi trường (không commit) |
 | `apps/api/db/schema.sql` | SQL schema reference |
 | `apps/api/db/alembic/versions/` | Lịch sử migration |
