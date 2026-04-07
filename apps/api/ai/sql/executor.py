@@ -46,7 +46,7 @@ async def execute_sql(
     user_role: str = "employee",
     user_id: str = "",
     department_id: str = "",
-    max_retries: int = 2
+    max_retries: int = 5
 ) -> Dict[str, Any]:
     """Thực thi SQL với vòng lặp tự sửa lỗi."""
     current_sql = sql.strip()
