@@ -183,3 +183,68 @@ cd apps/api
    - Backend: `apps/api/.venv/Scripts/python.exe -m pytest tests/ -v` (hoặc subset phù hợp).
    - Frontend: `npm run build` trong `apps/web` khi thay đổi liên quan web.
 4. Báo cáo kết quả pass/fail và danh sách secret cần set trên GitHub.
+
+---
+
+## 7) Implementation Plan — Auto deploy khi push `main` (VPS non-Docker)
+
+> **Ngày tạo kế hoạch:** 2026-04-08  
+> **Trạng thái:** Chờ duyệt
+
+### 7.1 Bối cảnh hiện tại
+
+- Repo đã có `.github/workflows/deploy-vps.yml` nhưng trigger đang là `workflow_dispatch` (deploy thủ công).
+- Hạ tầng production đang chạy **không dùng Docker** cho app; runtime chính là PM2 + venv.
+- Redis và Qdrant được quản trị tách riêng, không cần rebuild theo mỗi lần deploy app.
+
+### 7.2 Mục tiêu
+
+1. Mỗi lần push vào nhánh `main`, GitHub Actions tự SSH vào VPS và deploy bản mới.
+2. Giữ khả năng deploy thủ công cho rollback/hotfix theo `git_ref`.
+3. Deploy fail phải dừng sớm (`script_stop`) và báo trạng thái rõ trên Actions.
+
+### 7.3 Phạm vi thay đổi dự kiến
+
+- Cập nhật `.github/workflows/deploy-vps.yml`:
+  - Thêm trigger `push.branches: [main]`.
+  - Giữ `workflow_dispatch` cho manual deploy.
+  - Tách logic input để workflow chạy được cả auto mode và manual mode.
+- (Tùy chọn nhưng khuyến nghị) thêm script deploy trên VPS: `scripts/deploy_vps.sh` hoặc dùng script inline chuẩn hóa.
+- Cập nhật `task.md` với checklist mục CI/CD auto deploy.
+- Cập nhật tài liệu vận hành ngắn trong `docs/PRODUCTION_RUNBOOK.md` hoặc `README.md`.
+
+### 7.4 Thiết kế workflow đề xuất
+
+- **Trigger**
+  - Auto: `push` lên `main`.
+  - Manual: `workflow_dispatch` với `git_ref`, `run_migrations`.
+- **Concurrency**
+  - `group: deploy-vps-production`, `cancel-in-progress: false` để tránh chồng deploy.
+- **SSH Deploy steps**
+  1. Resolve `TARGET_REF` (auto = `${{ github.sha }}` hoặc `main`; manual = input).
+  2. `git fetch --all --prune --tags`.
+  3. Checkout đúng ref.
+  4. API: activate venv, `pip install -r requirements.txt`, optional `alembic upgrade head`.
+  5. Restart PM2: `widget-api`, `widget-worker`, `widget-web`, `widget-sdk`.
+  6. Web + widget build lại bằng `npm ci && npm run build`.
+  7. Health-check API/widget endpoint; fail thì exit code != 0.
+
+### 7.5 Secrets/biến bắt buộc
+
+- `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_PORT`, `VPS_APP_PATH`.
+- Khuyến nghị đặt trong GitHub Environment `production`.
+
+### 7.6 Tiêu chí nghiệm thu
+
+- Push commit vào `main` tự kích hoạt `deploy-vps.yml`.
+- Job deploy hoàn thành xanh và health-check pass.
+- PM2 process sau deploy ở trạng thái `online`.
+- Vẫn chạy được manual deploy cho ref/tag cụ thể.
+
+### 7.7 Kế hoạch thực thi sau khi được duyệt
+
+1. Cập nhật `task.md` checklist cho hạng mục auto deploy.
+2. Sửa `.github/workflows/deploy-vps.yml` theo thiết kế mục 7.4.
+3. Chạy kiểm tra backend test theo quy định dự án:
+   - `apps/api/.venv/Scripts/python.exe -m pytest tests/ -v` (hoặc subset hợp lệ theo phạm vi đổi).
+4. Báo cáo kết quả pass/fail + danh sách secrets cần xác nhận ở GitHub.
