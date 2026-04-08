@@ -1,7 +1,15 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
 export default function LandingPage() {
+  const [isDemoOpen, setIsDemoOpen] = useState(false);
+
+  const demoEmbedUrl =
+    "https://www.youtube-nocookie.com/embed/ypFXJtJeS_U?rel=0&modestbranding=1&controls=1&playsinline=1&fs=0";
+
   const features = [
     {
       title: "Knowledge Base (RAG)",
@@ -187,7 +195,11 @@ export default function LandingPage() {
             >
               Bắt đầu miễn phí
             </Link>
-            <button className="w-full md:w-auto bg-white text-slate-900 border border-slate-200 px-10 py-5 rounded-2xl text-lg font-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsDemoOpen(true)}
+              className="w-full md:w-auto bg-white text-slate-900 border border-slate-200 px-10 py-5 rounded-2xl text-lg font-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+            >
               <span className="material-symbols-outlined">play_circle</span>
               Xem Video Demo
             </button>
@@ -627,6 +639,34 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {isDemoOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/70 p-4 md:p-8 flex items-center justify-center">
+          <div className="w-full max-w-5xl bg-black rounded-2xl overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-900 text-white">
+              <p className="text-sm font-semibold">Video Demo</p>
+              <button
+                type="button"
+                onClick={() => setIsDemoOpen(false)}
+                className="px-3 py-1 rounded-md bg-white/10 hover:bg-white/20"
+              >
+                Đóng
+              </button>
+            </div>
+
+            <div className="aspect-video">
+              <iframe
+                className="w-full h-full"
+                src={demoEmbedUrl}
+                title="XenoAI Demo Video"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allow="autoplay; encrypted-media; picture-in-picture"
+                sandbox="allow-scripts allow-same-origin allow-presentation"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CTA Floating Button */}
       <div className="fixed bottom-8 right-8 z-50">
