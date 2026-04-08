@@ -17,8 +17,8 @@ const STORAGE_LIMIT_BYTES = 50 * 1024 * 1024 * 1024;
 
 function formatFileSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024)
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
 }
@@ -62,16 +62,21 @@ export default function KnowledgeBasePage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [storageLimit, setStorageLimit] = useState(50 * 1024 * 1024); // Mặc định 50MB
 
   const loadDocuments = async (showLoading = false) => {
     if (!accessToken) return;
     if (showLoading) setIsLoading(true);
 
     try {
-      const data = (await api.get(
-        "/api/v1/files/list",
-      )) as DocumentInfo[];
+      const data = (await api.get("/api/v1/files/list")) as DocumentInfo[];
       setDocuments(Array.isArray(data) ? data : []);
+
+      // Load billing summary to get accurate storage limit
+      const billing = (await api.get("/api/v1/admin/billing/summary")) as any;
+      if (billing?.usage?.rag_storage?.limit_bytes) {
+        setStorageLimit(billing.usage.rag_storage.limit_bytes);
+      }
     } catch (err) {
       setError((err as Error).message || "Lỗi kết nối backend.");
     } finally {
@@ -164,7 +169,7 @@ export default function KnowledgeBasePage() {
 
   const storagePercent = Math.min(
     100,
-    (storageUsedBytes / STORAGE_LIMIT_BYTES) * 100,
+    (storageUsedBytes / (storageLimit || 1)) * 100,
   );
 
   return (
@@ -264,7 +269,8 @@ export default function KnowledgeBasePage() {
             <div className="relative z-10">
               <h4 className="font-bold mb-1 opacity-90">Tổng dung lượng</h4>
               <div className="text-3xl font-black mb-4">
-                {formatFileSize(storageUsedBytes)} / 50 GB
+                {formatFileSize(storageUsedBytes)} /{" "}
+                {formatFileSize(storageLimit)}
               </div>
               <div className="w-full bg-white/20 h-2 rounded-full mb-4">
                 <div

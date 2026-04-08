@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 
 type ApiKey = {
@@ -36,7 +36,7 @@ export default function ApiKeysPage() {
   const [newKeyLabel, setNewKeyLabel] = useState("Default");
   const [createdKey, setCreatedKey] = useState<CreatedKey | null>(null);
 
-  const loadKeys = async () => {
+  const loadKeys = useCallback(async () => {
     setError("");
     try {
       const data = (await api.get("/api/v1/admin/keys")) as ApiKey[];
@@ -46,11 +46,11 @@ export default function ApiKeysPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [api]);
 
   useEffect(() => {
     loadKeys();
-  }, []);
+  }, [loadKeys]);
 
   const createKey = async () => {
     setIsSubmitting(true);

@@ -37,7 +37,7 @@ export default function AdminHealthPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, api]);
 
   useEffect(() => {
     refresh();

@@ -1,47 +1,68 @@
 [
   {
+    "dialect": "postgresql",
     "question": "Tháng này phòng nào có nhân viên nghỉ phép nhiều nhất?",
     "sql": "SELECT d.name AS department_name, COUNT(lr.id) AS leave_count FROM leave_requests lr JOIN departments d ON lr.department_id = d.id WHERE EXTRACT(MONTH FROM lr.start_date) = EXTRACT(MONTH FROM NOW()) AND EXTRACT(YEAR FROM lr.start_date) = EXTRACT(YEAR FROM NOW()) GROUP BY d.name ORDER BY leave_count DESC LIMIT 1",
     "note": "Dùng EXTRACT để lọc tháng và năm hiện tại."
   },
   {
+    "dialect": "postgresql",
     "question": "Liệt kê 10 nhân viên có lương cao nhất",
     "sql": "SELECT e.id, e.full_name, e.salary FROM employees e ORDER BY e.salary DESC LIMIT 10",
     "note": "Sắp xếp giảm dần theo lương."
   },
   {
+    "dialect": "postgresql",
     "question": "Có bao nhiêu nhân viên đang thử việc?",
     "sql": "SELECT COUNT(e.id) AS probation_count FROM employees e WHERE e.contract_type = 'probation'",
     "note": "Dùng COUNT cho câu hỏi thống kê đơn."
   },
   {
+    "dialect": "postgresql",
     "question": "Top 5 dự án trễ deadline nhiều nhất",
     "sql": "SELECT p.project_code, p.project_name, (CURRENT_DATE - p.deadline) AS late_days FROM projects p WHERE p.deadline < CURRENT_DATE AND p.status <> 'done' ORDER BY late_days DESC LIMIT 5",
     "note": "So sánh deadline với ngày hiện tại."
   },
   {
+    "dialect": "postgresql",
     "question": "Dự án nào có nhiều task quá hạn nhất?",
     "sql": "SELECT p.project_name, COUNT(t.id) AS overdue_tasks FROM tasks t JOIN projects p ON t.project_id = p.id WHERE t.due_date < CURRENT_DATE AND t.status <> 'done' GROUP BY p.project_name ORDER BY overdue_tasks DESC LIMIT 1",
     "note": "JOIN tasks với projects và gom nhóm theo dự án."
   },
   {
+    "dialect": "postgresql",
     "question": "Trong quý này có bao nhiêu task đã hoàn thành?",
     "sql": "SELECT COUNT(t.id) AS done_tasks FROM tasks t WHERE t.status = 'done' AND DATE_PART('quarter', t.updated_at) = DATE_PART('quarter', NOW()) AND DATE_PART('year', t.updated_at) = DATE_PART('year', NOW())",
     "note": "Lọc theo quý và năm hiện tại."
   },
   {
+    "dialect": "postgresql",
     "question": "Top 10 khách hàng mang lại doanh thu cao nhất năm nay",
     "sql": "SELECT c.customer_name, SUM(o.total_amount) AS revenue FROM orders o JOIN customers c ON o.customer_id = c.id WHERE DATE_PART('year', o.created_at) = DATE_PART('year', NOW()) GROUP BY c.customer_name ORDER BY revenue DESC LIMIT 10",
     "note": "Tính tổng doanh thu theo khách hàng."
   },
   {
+    "dialect": "postgresql",
     "question": "Khách hàng nào đã lâu chưa phát sinh đơn hàng?",
     "sql": "SELECT c.customer_name, MAX(o.created_at) AS last_order_at FROM customers c LEFT JOIN orders o ON c.id = o.customer_id GROUP BY c.customer_name ORDER BY last_order_at ASC NULLS FIRST LIMIT 20",
     "note": "Dùng LEFT JOIN để giữ cả khách hàng chưa từng có đơn."
   },
   {
+    "dialect": "postgresql",
     "question": "Tỷ lệ chuyển đổi lead sang khách hàng trong tháng này là bao nhiêu?",
     "sql": "SELECT ROUND(100.0 * SUM(CASE WHEN l.status = 'converted' THEN 1 ELSE 0 END) / NULLIF(COUNT(l.id), 0), 2) AS conversion_rate FROM leads l WHERE DATE_PART('month', l.created_at) = DATE_PART('month', NOW()) AND DATE_PART('year', l.created_at) = DATE_PART('year', NOW())",
     "note": "Tránh chia cho 0 bằng NULLIF."
+  },
+  {
+    "dialect": "postgresql",
+    "question": "Doanh thu theo từng tháng của 6 tháng gần nhất và chỉ lấy tháng doanh thu trên 100 triệu",
+    "sql": "SELECT DATE_TRUNC('month', o.created_at) AS month_bucket, SUM(o.total_amount) AS revenue FROM orders o WHERE o.created_at >= NOW() - INTERVAL '6 months' GROUP BY month_bucket HAVING SUM(o.total_amount) > 100000000 ORDER BY month_bucket DESC LIMIT 6",
+    "note": "Case hard: aggregate + group by + having + filter thời gian."
+  },
+  {
+    "dialect": "mysql",
+    "question": "Top 5 khách hàng có doanh thu cao nhất trong quý hiện tại",
+    "sql": "SELECT c.customer_name, SUM(o.total_amount) AS revenue FROM orders o JOIN customers c ON o.customer_id = c.id WHERE QUARTER(o.created_at) = QUARTER(CURDATE()) AND YEAR(o.created_at) = YEAR(CURDATE()) GROUP BY c.customer_name ORDER BY revenue DESC LIMIT 5",
+    "note": "Case MySQL: QUARTER/CURDATE và GROUP BY."
   }
 ]

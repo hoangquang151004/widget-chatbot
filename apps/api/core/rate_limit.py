@@ -9,7 +9,7 @@ class RateLimiter:
     """Redis-based Rate Limiter for SaaS Tenants, distinguishing between keys."""
     
     PUBLIC_KEY_LIMIT = 60   # 60 req/min (chat widget)
-    SECRET_KEY_LIMIT = 30   # 30 req/min (dashboard admin)
+    SECRET_KEY_LIMIT = 100  # 100 req/min (dashboard admin)
     WINDOW = 60             # per 60 seconds
 
     def __init__(self):

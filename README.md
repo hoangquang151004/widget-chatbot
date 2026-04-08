@@ -117,13 +117,16 @@ _Dự án đang trong quá trình phát triển tích cực._
 
 - `.github/workflows/ci.yml`
   - Trigger: `push` (`main`, `develop`), `pull_request` (`main`, `develop`), `workflow_dispatch`.
-  - Chạy: backend lint (`ruff`), backend test (`pytest` + Postgres/Redis/Qdrant), web lint + build, widget build.
+  - Chạy: backend lint (`ruff` rules runtime `E9,F63,F7,F82`), backend test (`pytest` + Postgres/Redis/Qdrant), web lint + build, widget build.
+  - Job backend test dùng PostgreSQL service có `pgvector` và chủ động `CREATE EXTENSION IF NOT EXISTS vector` trước bước `alembic upgrade head`.
 - `.github/workflows/deploy.yml`
   - Trigger: push tag `v*` hoặc chạy tay (`workflow_dispatch`).
-  - Chức năng: kiểm tra commit đã pass CI, build/push Docker image API + Web lên GHCR.
+  - Chức năng: kiểm tra commit của tag đã pass CI, build/push Docker image API + Web lên GHCR, ghi digest + commit SHA vào summary.
 - `.github/workflows/deploy-vps.yml`
   - Trigger: chạy tay (`workflow_dispatch`).
   - Chức năng: deploy branch/tag lên VPS qua SSH, tùy chọn chạy migration, restart PM2, health check.
+
+Lưu ý hiện tại: push vào `main` **chưa tự động deploy VPS**. Release production cần chạy workflow deploy VPS thủ công.
 
 ### Secrets cần cấu hình trên GitHub
 

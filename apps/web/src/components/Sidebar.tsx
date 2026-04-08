@@ -11,6 +11,11 @@ const menuItems = [
     href: "/dashboard",
   },
   {
+    label: "Lịch sử hội thoại",
+    icon: "chat_bubble_outline",
+    href: "/dashboard/conversations",
+  },
+  {
     label: "Cơ sở tri thức (RAG)",
     icon: "database",
     href: "/dashboard/knowledge-base",

@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_platform_admin)])
 
 
-class TenantStatusBody(BaseModel):
-    is_active: bool
+class TenantUpdateBody(BaseModel):
+    is_active: Optional[bool] = None
+    plan: Optional[str] = None
 
 
 class ImpersonateBody(BaseModel):
@@ -183,8 +184,8 @@ async def list_customers(
 
 
 @router.patch("/tenants/{tenant_id}")
-async def set_tenant_active(tenant_id: UUID, body: TenantStatusBody):
-    """Kích hoạt / khóa tài khoản tenant."""
+async def update_tenant(tenant_id: UUID, body: TenantUpdateBody):
+    """Cập nhật trạng thái hoặc gói cước của tenant."""
     async with async_session() as session:
         res = await session.execute(
             select(Tenant).where(Tenant.id == tenant_id, Tenant.role == "tenant")
@@ -193,16 +194,23 @@ async def set_tenant_active(tenant_id: UUID, body: TenantStatusBody):
         if not tenant:
             raise HTTPException(status_code=404, detail="Không tìm thấy tenant.")
 
-        await session.execute(
-            update(Tenant).where(Tenant.id == tenant_id).values(is_active=body.is_active)
-        )
-        await session.commit()
+        update_data = {}
+        if body.is_active is not None:
+            update_data["is_active"] = body.is_active
+        if body.plan is not None:
+            update_data["plan"] = body.plan
+
+        if update_data:
+            await session.execute(
+                update(Tenant).where(Tenant.id == tenant_id).values(**update_data)
+            )
+            await session.commit()
 
     logger.info(
-        "platform_admin_tenant_status",
-        extra={"tenant_id": str(tenant_id), "is_active": body.is_active},
+        "platform_admin_tenant_update",
+        extra={"tenant_id": str(tenant_id), **update_data},
     )
-    return {"id": str(tenant_id), "is_active": body.is_active}
+    return {"id": str(tenant_id), **update_data}
 
 
 @router.post("/impersonate")

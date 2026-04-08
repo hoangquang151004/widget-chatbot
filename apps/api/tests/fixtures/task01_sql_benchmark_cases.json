@@ -1,0 +1,95 @@
+[
+  {
+    "id": "easy_01",
+    "level": "easy",
+    "schema": {
+      "tables": {
+        "orders": { "columns": [{ "name": "id" }, { "name": "total" }] }
+      }
+    },
+    "baseline_sql": "SELECT id, total FROM orders",
+    "tuned_sql": "SELECT id, total FROM orders LIMIT 100"
+  },
+  {
+    "id": "easy_02",
+    "level": "easy",
+    "schema": {
+      "tables": {
+        "customers": { "columns": [{ "name": "id" }, { "name": "name" }] }
+      }
+    },
+    "baseline_sql": "SELECT id, name FROM customers LIMIT 20",
+    "tuned_sql": "SELECT id, name FROM customers LIMIT 20"
+  },
+  {
+    "id": "medium_01",
+    "level": "medium",
+    "schema": {
+      "tables": {
+        "orders": { "columns": [{ "name": "id" }, { "name": "customer_id" }, { "name": "total_amount" }] },
+        "customers": { "columns": [{ "name": "id" }, { "name": "customer_name" }] }
+      }
+    },
+    "baseline_sql": "SELECT c.customer_name, SUM(o.total_amount) AS revenue FROM orders o JOIN customers c ON o.customer_id = c.id GROUP BY c.customer_name",
+    "tuned_sql": "SELECT c.customer_name, SUM(o.total_amount) AS revenue FROM orders o JOIN customers c ON o.customer_id = c.id GROUP BY c.customer_name LIMIT 100"
+  },
+  {
+    "id": "medium_02",
+    "level": "medium",
+    "schema": {
+      "tables": {
+        "tasks": { "columns": [{ "name": "id" }, { "name": "project_id" }] },
+        "projects": { "columns": [{ "name": "id" }, { "name": "project_name" }] }
+      }
+    },
+    "baseline_sql": "SELECT p.project_name, COUNT(t.id) AS task_count FROM tasks t JOIN projects p ON t.project_id = p.id GROUP BY p.project_name",
+    "tuned_sql": "SELECT p.project_name, COUNT(t.id) AS task_count FROM tasks t JOIN projects p ON t.project_id = p.id GROUP BY p.project_name LIMIT 100"
+  },
+  {
+    "id": "hard_01",
+    "level": "hard",
+    "schema": {
+      "tables": {
+        "orders": { "columns": [{ "name": "id" }, { "name": "customer_id" }, { "name": "total_amount" }] },
+        "customers": { "columns": [{ "name": "id" }, { "name": "customer_name" }] },
+        "payments": { "columns": [{ "name": "id" }, { "name": "order_id" }] }
+      }
+    },
+    "baseline_sql": "SELECT c.customer_name, SUM(o.total_amount) FROM orders o JOIN customers c ON o.customer_id = c.id JOIN payments p ON p.order_id = o.id GROUP BY c.customer_name; SELECT 1",
+    "tuned_sql": "SELECT c.customer_name, SUM(o.total_amount) AS revenue FROM orders o JOIN customers c ON o.customer_id = c.id JOIN payments p ON p.order_id = o.id GROUP BY c.customer_name LIMIT 100"
+  },
+  {
+    "id": "hard_02",
+    "level": "hard",
+    "schema": {
+      "tables": {
+        "orders": { "columns": [{ "name": "id" }, { "name": "total_amount" }, { "name": "created_at" }] }
+      }
+    },
+    "baseline_sql": "SELECT table_name FROM information_schema.tables",
+    "tuned_sql": "SELECT DATE_TRUNC('month', o.created_at) AS month_bucket, SUM(o.total_amount) AS revenue FROM orders o GROUP BY month_bucket HAVING SUM(o.total_amount) > 0 LIMIT 12"
+  },
+  {
+    "id": "hard_03",
+    "level": "hard",
+    "schema": {
+      "tables": {
+        "employees": { "columns": [{ "name": "id" }, { "name": "name" }, { "name": "department_id" }] },
+        "departments": { "columns": [{ "name": "id" }, { "name": "name" }] }
+      }
+    },
+    "baseline_sql": "SELECT e.name, d.name FROM employees e JOIN departments d ON e.department_id = d.id",
+    "tuned_sql": "SELECT e.name AS employee_name, d.name AS department_name FROM employees e JOIN departments d ON e.department_id = d.id LIMIT 100"
+  },
+  {
+    "id": "hard_04",
+    "level": "hard",
+    "schema": {
+      "tables": {
+        "leads": { "columns": [{ "name": "id" }, { "name": "status" }] }
+      }
+    },
+    "baseline_sql": "DELETE FROM leads WHERE status = 'new'",
+    "tuned_sql": "SELECT COUNT(l.id) AS new_leads FROM leads l WHERE l.status = 'new' LIMIT 100"
+  }
+]

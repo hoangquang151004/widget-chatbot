@@ -60,3 +60,6 @@ celerybeat-schedule.*
 # Keep migration files; ignore caches only
 apps/api/db/alembic/__pycache__/
 apps/api/db/alembic/versions/__pycache__/
+
+
+fix_bug/

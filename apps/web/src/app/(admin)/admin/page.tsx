@@ -46,7 +46,7 @@ export default function AdminOverviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, api]);
 
   return (
     <div className="space-y-6">

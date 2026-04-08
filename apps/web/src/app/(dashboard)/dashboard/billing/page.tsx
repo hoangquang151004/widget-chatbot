@@ -111,7 +111,8 @@ const PLAN_FREE_BASIC: PlanDef[] = [
 const PLAN_ENTERPRISE: PlanDef = {
   id: "enterprise",
   title: "Doanh nghiệp",
-  blurb: "Nền tảng đầy đủ: nhiều widget, bán hàng trên chatbot và trải nghiệm nâng cao.",
+  blurb:
+    "Nền tảng đầy đủ: nhiều widget, bán hàng trên chatbot và trải nghiệm nâng cao.",
   priceLabel: "999k",
   priceHint: "/tháng",
   featured: true,
@@ -132,7 +133,8 @@ const PLAN_ENTERPRISE: PlanDef = {
 const PLAN_ENTERPRISE_PRO: PlanDef = {
   id: "enterprise_pro",
   title: "Doanh nghiệp Pro",
-  blurb:"Bản nâng cấp của gói Doanh nghiệp: giữ nguyên mọi tính năng gói 3, thêm dung lượng lớn hơn, lưu hội thoại tập trung và phân tích hành vi.",
+  blurb:
+    "Bản nâng cấp của gói Doanh nghiệp: giữ nguyên mọi tính năng gói 3, thêm dung lượng lớn hơn, lưu hội thoại tập trung và phân tích hành vi.",
   priceLabel: "2tr499",
   priceHint: "/tháng",
   featured: false,
@@ -222,7 +224,7 @@ export default function BillingPage() {
     };
 
     loadBillingSummary();
-  }, [accessToken]);
+  }, [accessToken, api]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -381,7 +383,9 @@ export default function BillingPage() {
             }}
             className="mt-auto w-full py-3 px-6 rounded-full text-center bg-primary text-on-primary font-bold shadow-lg shadow-primary/30 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {payosLoading ? "Đang tạo link…" : `Thanh toán PayOS — ${def.title}`}
+            {payosLoading
+              ? "Đang tạo link…"
+              : `Thanh toán PayOS — ${def.title}`}
           </button>
         ) : showMailtoCta ? (
           <a
@@ -463,8 +467,8 @@ export default function BillingPage() {
 
         {payosReturn === "success" && (
           <div className="mb-4 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-on-surface">
-            Thanh toán đã ghi nhận (hoặc đang xử lý). Nếu gói chưa đổi ngay, vui lòng tải lại
-            trang sau vài giây.
+            Thanh toán đã ghi nhận (hoặc đang xử lý). Nếu gói chưa đổi ngay, vui
+            lòng tải lại trang sau vài giây.
           </div>
         )}
 

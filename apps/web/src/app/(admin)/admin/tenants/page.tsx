@@ -18,6 +18,13 @@ type ListResponse = {
   items: TenantRow[];
 };
 
+const PLANS = [
+  { id: "starter", label: "Starter" },
+  { id: "pro", label: "Pro" },
+  { id: "enterprise", label: "Enterprise" },
+  { id: "enterprise_pro", label: "Enterprise Pro" },
+];
+
 function formatPlan(plan: string): string {
   const m: Record<string, string> = {
     starter: "Starter",
@@ -37,6 +44,10 @@ export default function AdminTenantsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  
+  // State for editing plan
+  const [editingTenant, setEditingTenant] = useState<TenantRow | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState("");
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -53,7 +64,7 @@ export default function AdminTenantsPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, search]);
+  }, [accessToken, search, api]);
 
   useEffect(() => {
     load();
@@ -95,13 +106,30 @@ export default function AdminTenantsPage() {
     }
   };
 
+  const handleChangePlan = async () => {
+    if (!editingTenant) return;
+    setBusyId(editingTenant.id);
+    setError("");
+    try {
+      await api.patch(`/api/v1/platform-admin/tenants/${editingTenant.id}`, {
+        plan: selectedPlan,
+      });
+      setEditingTenant(null);
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Cập nhật gói thất bại.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Quản lý Khách hàng (Tenants)</h1>
           <p className="text-sm text-slate-500">
-            Dữ liệu từ API — kích hoạt / khóa và đăng nhập hộ (impersonate).
+            Dữ liệu từ API — quản lý kích hoạt, gói cước và đăng nhập hộ.
           </p>
         </div>
       </div>
@@ -151,8 +179,19 @@ export default function AdminTenantsPage() {
                 <tr key={t.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="font-bold text-slate-800">{t.name}</div>
-                    <div className="text-[10px] font-black uppercase text-indigo-500 tracking-widest">
-                      {formatPlan(t.plan)}
+                    <div className="flex items-center gap-2">
+                       <div className="text-[10px] font-black uppercase text-indigo-500 tracking-widest">
+                         {formatPlan(t.plan)}
+                       </div>
+                       <button 
+                          onClick={() => {
+                            setEditingTenant(t);
+                            setSelectedPlan(t.plan);
+                          }}
+                          className="text-[10px] bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 px-1.5 py-0.5 rounded font-bold transition-colors"
+                       >
+                          Đổi gói
+                       </button>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">{t.email}</td>
@@ -205,6 +244,62 @@ export default function AdminTenantsPage() {
           <div className="p-12 text-center text-slate-500 text-sm">Không có tenant nào.</div>
         )}
       </div>
+
+      {/* Edit Plan Modal Overlay */}
+      {editingTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                 <div>
+                    <h3 className="text-lg font-black text-slate-900">Thay đổi gói cước</h3>
+                    <p className="text-xs text-slate-500 font-medium">{editingTenant.name} ({editingTenant.email})</p>
+                 </div>
+                 <button 
+                    onClick={() => setEditingTenant(null)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white transition-colors"
+                 >
+                    <span className="material-symbols-outlined text-slate-400 text-[20px]">close</span>
+                 </button>
+              </div>
+              <div className="p-8 space-y-6">
+                 <div className="grid grid-cols-1 gap-3">
+                    {PLANS.map((p) => (
+                       <button
+                          key={p.id}
+                          onClick={() => setSelectedPlan(p.id)}
+                          className={`flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${
+                            selectedPlan === p.id 
+                              ? "border-indigo-600 bg-indigo-50/50 text-indigo-700 shadow-sm" 
+                              : "border-slate-100 hover:border-slate-200 text-slate-600"
+                          }`}
+                       >
+                          <span className="font-bold">{p.label}</span>
+                          {selectedPlan === p.id && (
+                             <span className="material-symbols-outlined text-indigo-600 text-[20px]">check_circle</span>
+                          )}
+                       </button>
+                    ))}
+                 </div>
+
+                 <div className="flex gap-3 pt-4">
+                    <button
+                       onClick={() => setEditingTenant(null)}
+                       className="flex-1 px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-all"
+                    >
+                       Hủy
+                    </button>
+                    <button
+                       disabled={busyId === editingTenant.id || selectedPlan === editingTenant.plan}
+                       onClick={handleChangePlan}
+                       className="flex-1 px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-200 transition-all disabled:opacity-50"
+                    >
+                       {busyId === editingTenant.id ? "Đang lưu..." : "Xác nhận thay đổi"}
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }

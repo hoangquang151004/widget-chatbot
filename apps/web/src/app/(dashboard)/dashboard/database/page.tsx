@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { FormEvent, useEffect, useMemo, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useApi } from "@/hooks/useApi";
 
@@ -92,48 +93,47 @@ export default function DatabasePage() {
     "idle",
   );
 
+  const loadConfig = useCallback(async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const data = (await api.get(
+        "/api/v1/admin/database",
+      )) as DatabaseConfigResponse;
+      if (data.config) {
+        setHasStoredConfig(true);
+        setForm({
+          db_type: normalizeDbType(data.config.db_type),
+          db_host: data.config.db_host || "",
+          db_port: String(
+            data.config.db_port ||
+              getDefaultPort(normalizeDbType(data.config.db_type)),
+          ),
+          db_name: data.config.db_name || "",
+          db_username: data.config.db_username || "",
+          db_password: "",
+        });
+        setMessage(
+          "Đã tải cấu hình hiện có. Vui lòng nhập lại mật khẩu trước khi lưu hoặc test.",
+        );
+      } else {
+        setHasStoredConfig(false);
+        setForm(DEFAULT_FORM);
+      }
+    } catch (err: any) {
+      setError(err.message || "Không thể tải cấu hình database.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [api]);
+
   useEffect(() => {
     if (!accessToken) {
       setIsLoading(false);
       return;
     }
-
-    const loadConfig = async () => {
-      setIsLoading(true);
-      setError("");
-      try {
-        const data = (await api.get(
-          "/api/v1/admin/database",
-        )) as DatabaseConfigResponse;
-        if (data.config) {
-          setHasStoredConfig(true);
-          setForm({
-            db_type: normalizeDbType(data.config.db_type),
-            db_host: data.config.db_host || "",
-            db_port: String(
-              data.config.db_port ||
-                getDefaultPort(normalizeDbType(data.config.db_type)),
-            ),
-            db_name: data.config.db_name || "",
-            db_username: data.config.db_username || "",
-            db_password: "",
-          });
-          setMessage(
-            "Đã tải cấu hình hiện có. Vui lòng nhập lại mật khẩu trước khi lưu hoặc test.",
-          );
-        } else {
-          setHasStoredConfig(false);
-          setForm(DEFAULT_FORM);
-        }
-      } catch (err: any) {
-        setError(err.message || "Không thể tải cấu hình database.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadConfig();
-  }, [accessToken]);
+  }, [accessToken, loadConfig]);
 
   const applyDbType = (dbType: DatabaseType) => {
     setForm((prev) => ({
@@ -519,20 +519,22 @@ export default function DatabasePage() {
       </div>
 
       <section className="mt-12 overflow-hidden rounded-3xl relative h-48 group">
-        <img
-          className="w-full h-full object-cover filter brightness-50 contrast-125 group-hover:scale-105 transition-transform duration-700"
+        <Image
+          className="object-cover filter brightness-50 contrast-125 group-hover:scale-105 transition-transform duration-700"
           src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-oBl0lqAtndnOX3ELDTy0stJoIz-wlIkfLAxa_wpvyyN60PGHbGbm3oA9_F3dhXWh3Px00rTWVCoRsBLFx1D0jnFfbuWB2o0e-bVVCqDeexC6LRQVj8raLX1INx8vyE34LgMxLeQMCjsS3lzvEmRjsbykLEquZdKnzImKTfPDgm7P15_IacGUiUQVe4CY4ZlAXDMuNxpQHfRTb3DsznxSJxcOFjiarMg1bxRqb0V58A0vNc5BMDthvhmE5V4wQ2kyHgQrcHRMBCKn"
           alt="Abstract decorative background"
+          fill
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-primary/80 to-transparent flex items-center px-12">
           <div className="max-w-md">
             <h4 className="text-white text-xl font-bold mb-2">
               Khám phá sức mạnh của dữ liệu
             </h4>
-            <p className="text-white/80 text-sm">
+            <h4 className="text-white/80 text-sm">
               Hệ thống Text-to-SQL cho phép bạn tạo ra báo cáo chỉ bằng cách đặt
               câu hỏi. Không cần code, không cần chuyên môn kỹ thuật cao.
-            </p>
+            </h4>
           </div>
         </div>
       </section>

@@ -21,6 +21,7 @@ from core.security import security_utils
 from db.session import async_session
 from models.ai_settings import TenantAiSettings
 from models.allowed_origin import TenantAllowedOrigin
+from models.chat import ChatMessage, ChatSession
 from models.document import TenantDocument
 from models.tenant import Tenant
 from models.tenant_db_config import TenantDatabaseConfig
@@ -97,6 +98,28 @@ class DBConfigSchema(BaseModel):
     db_name: str
     db_username: str
     db_password: str
+
+
+class ChatMessageSchema(BaseModel):
+    id: UUID
+    role: str
+    content: str
+    intent: Optional[str] = None
+    rag_sources: Optional[dict] = None
+    sql_query: Optional[str] = None
+    latency_ms: Optional[int] = None
+    token_count: Optional[int] = None
+    created_at: datetime
+
+
+class ChatSessionSchema(BaseModel):
+    id: UUID
+    visitor_id: str
+    message_count: int
+    is_active: bool
+    started_at: datetime
+    last_active_at: datetime
+    ended_at: Optional[datetime] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -917,3 +940,88 @@ async def test_db_connection(config: DBConfigSchema, request: Request):
             "message": f"Kết nối thất bại: {str(e)}",
             "status": "error"
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Conversation History
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/conversations", response_model=List[ChatSessionSchema], dependencies=[Depends(require_tenant_account)])
+async def get_conversations(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """Lấy danh sách các phiên chat của tenant (phân trang)."""
+    if not request.state.is_admin:
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
+
+    tenant_uuid = UUID(request.state.tenant_id)
+    offset = (page - 1) * page_size
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(ChatSession)
+            .filter(ChatSession.tenant_id == tenant_uuid)
+            .order_by(ChatSession.last_active_at.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        sessions = result.scalars().all()
+
+    return [
+        ChatSessionSchema(
+            id=s.id,
+            visitor_id=s.visitor_id,
+            message_count=s.message_count,
+            is_active=s.is_active,
+            started_at=s.started_at,
+            last_active_at=s.last_active_at,
+            ended_at=s.ended_at,
+        )
+        for s in sessions
+    ]
+
+
+@router.get("/conversations/{session_id}", response_model=List[ChatMessageSchema], dependencies=[Depends(require_tenant_account)])
+async def get_conversation_messages(session_id: UUID, request: Request):
+    """Lấy chi tiết các tin nhắn trong một phiên chat."""
+    if not request.state.is_admin:
+        raise HTTPException(status_code=403, detail="Yêu cầu Bearer token hợp lệ")
+
+    tenant_uuid = UUID(request.state.tenant_id)
+
+    async with async_session() as session:
+        # Verify session belongs to tenant
+        session_result = await session.execute(
+            select(ChatSession).filter(
+                ChatSession.id == session_id,
+                ChatSession.tenant_id == tenant_uuid
+            )
+        )
+        chat_session = session_result.scalars().first()
+        if not chat_session:
+            raise HTTPException(status_code=404, detail="Phiên hội thoại không tồn tại.")
+
+        # Get messages
+        messages_result = await session.execute(
+            select(ChatMessage)
+            .filter(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at.asc())
+        )
+        messages = messages_result.scalars().all()
+
+    return [
+        ChatMessageSchema(
+            id=m.id,
+            role=m.role,
+            content=m.content,
+            intent=m.intent,
+            rag_sources=m.rag_sources,
+            sql_query=m.sql_query,
+            latency_ms=m.latency_ms,
+            token_count=m.token_count,
+            created_at=m.created_at,
+        )
+        for m in messages
+    ]

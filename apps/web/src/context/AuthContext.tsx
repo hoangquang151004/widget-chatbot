@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   ReactNode,
+  useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
 
@@ -59,17 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
-  // Check storage on mount
-  useEffect(() => {
-    const savedToken = localStorage.getItem("access_token");
-    if (savedToken) {
-      verifyToken(savedToken);
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
+  const logout = useCallback(() => {
+    setAccessToken(null);
+    setTenant(null);
+    localStorage.removeItem("access_token");
+    router.push("/login");
+  }, [router]);
 
-  const verifyToken = async (token: string) => {
+  const verifyToken = useCallback(async (token: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/admin/me`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -92,7 +90,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [API_URL, logout]);
+
+  // Check storage on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem("access_token");
+    if (savedToken) {
+      verifyToken(savedToken);
+    } else {
+      setIsLoading(false);
+    }
+  }, [verifyToken]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
@@ -124,13 +132,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const logout = () => {
-    setAccessToken(null);
-    setTenant(null);
-    localStorage.removeItem("access_token");
-    router.push("/login");
   };
 
   return (

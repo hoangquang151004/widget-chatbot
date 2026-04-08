@@ -51,7 +51,7 @@ export default function AdminBillingPage() {
     return () => {
       c = true;
     };
-  }, [accessToken]);
+  }, [accessToken, api]);
 
   return (
     <div className="space-y-6">

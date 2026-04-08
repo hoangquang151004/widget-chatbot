@@ -45,19 +45,33 @@ def _schema_to_text(schema: Dict[str, Any]) -> str:
 
     return "\n".join(lines)
 
-def _select_few_shots(question: str, examples: List[Dict[str, Any]], top_k: int = 3) -> List[Dict[str, Any]]:
-    """Chọn few-shot gần nhất theo độ giao nhau token."""
+def _select_few_shots(
+    question: str,
+    examples: List[Dict[str, Any]],
+    dialect: str,
+    top_k: int = 3,
+) -> List[Dict[str, Any]]:
+    """Chọn few-shot theo ưu tiên dialect + độ giao nhau token."""
     if not examples:
         return []
 
     q_tokens = _normalize_tokens(question)
+    target_dialect = (dialect or "postgresql").lower()
+
+    filtered = [
+        ex for ex in examples
+        if (ex.get("dialect") or "postgresql").lower() == target_dialect
+    ] or examples
 
     def score(example: Dict[str, Any]) -> int:
         ex_tokens = _normalize_tokens(example.get("question", ""))
         return len(q_tokens & ex_tokens)
 
-    ranked = sorted(examples, key=score, reverse=True)
-    return [ex for ex in ranked if score(ex) > 0][:top_k]
+    ranked = sorted(filtered, key=score, reverse=True)
+    matched = [ex for ex in ranked if score(ex) > 0][:top_k]
+    if matched:
+        return matched
+    return ranked[:top_k]
 
 def _extract_sql(raw: str) -> str:
     """Trích xuất SQL từ block markdown hoặc text thuần."""
@@ -126,7 +140,7 @@ async def generate_sql(
     db_name = schema.get("db_name", "tenant_db")
     dialect = schema.get("dialect") or "postgresql"
     schema_text = _schema_to_text(schema)
-    examples = _select_few_shots(question, _load_examples())
+    examples = _select_few_shots(question, _load_examples(), str(dialect))
     role_info = _role_hint(user_role, user_id, department_id)
     dialect_info = _dialect_hint(str(dialect))
 

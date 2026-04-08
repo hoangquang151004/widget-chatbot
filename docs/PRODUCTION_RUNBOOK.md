@@ -51,11 +51,41 @@ Nginx thêm header tương thích (và `X-Frame-Options`/`SAMEORIGIN` cho UI). *
 - GitHub Actions: job backend chạy Alembic + pytest (Postgres, Redis, Qdrant).
 - Smoke cục bộ: `apps/api/scripts/run_smoke_integration.py` (cần DB đã migrate và Redis).
 
+## GitHub Actions release/deploy
+
+### Trạng thái hiện tại
+
+- CI: `.github/workflows/ci.yml` chạy tự động khi push/PR (`main`, `develop`).
+- Build image: `.github/workflows/deploy.yml` chạy khi push tag `v*` hoặc chạy tay.
+- Deploy VPS: `.github/workflows/deploy-vps.yml` đang chạy **thủ công** (`workflow_dispatch`).
+
+### Luồng release production khuyến nghị
+
+1. Merge vào `main`, chờ CI xanh.
+2. Tạo tag release `vX.Y.Z` và push tag.
+3. Chờ workflow build/push image thành công.
+4. Chạy workflow deploy VPS với:
+   - `git_ref = vX.Y.Z`
+   - `run_migrations = true` (nếu release có migration)
+5. Kiểm tra health endpoint và trạng thái PM2.
+
+### Luồng rollback nhanh
+
+1. Chạy lại workflow deploy VPS.
+2. Chọn `git_ref` là tag stable trước đó.
+3. Đặt `run_migrations = false` nếu chỉ rollback app code.
+
+### Secrets bắt buộc trên GitHub
+
+- `VPS_HOST`, `VPS_PORT`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_APP_PATH`
+- `PROD_API_URL` (cho build web image)
+- Khuyến nghị cấu hình qua GitHub Environment `production`.
+
 ## Khắc sự cố nhanh
 
-| Triệu chứng | Hướng xử lý |
-|-------------|-------------|
-| 401/403 widget | Kiểm tra `X-Widget-Key`, origin trong `tenant_allowed_origins`. |
-| RAG không trả kết quả | `/api/health/detailed`, log Qdrant; thử upload lại / re-index. |
+| Triệu chứng             | Hướng xử lý                                                        |
+| ----------------------- | ------------------------------------------------------------------ |
+| 401/403 widget          | Kiểm tra `X-Widget-Key`, origin trong `tenant_allowed_origins`.    |
+| RAG không trả kết quả   | `/api/health/detailed`, log Qdrant; thử upload lại / re-index.     |
 | Text-to-SQL lỗi kết nối | Dashboard → Database: test connection; kiểm tra firewall DB khách. |
-| Rate limit 429 admin | Tạm điều chỉnh hoặc chờ window; xem `core/rate_limit.py`. |
+| Rate limit 429 admin    | Tạm điều chỉnh hoặc chờ window; xem `core/rate_limit.py`.          |
