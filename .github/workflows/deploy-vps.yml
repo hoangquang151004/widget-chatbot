@@ -1,9 +1,22 @@
 name: CD — Deploy To VPS (PM2)
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      git_ref:
+        description: "Branch hoặc tag cần deploy (vd: main hoặc v1.2.3)"
+        required: true
+        default: "main"
+        type: string
+      run_migrations:
+        description: "Chạy alembic upgrade head trước khi restart API"
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: deploy-vps-production
+  cancel-in-progress: false
 
 env:
   APP_PATH_DEFAULT: /var/www/widget.xenoai.vn
@@ -12,6 +25,7 @@ jobs:
   deploy:
     name: Deploy To VPS
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
       - name: Deploy over SSH
@@ -26,17 +40,28 @@ jobs:
           script: |
             set -e
 
+            TARGET_REF="${{ github.event.inputs.git_ref }}"
+            RUN_MIGRATIONS="${{ github.event.inputs.run_migrations }}"
+
             APP_PATH="${{ secrets.VPS_APP_PATH }}"
             if [ -z "$APP_PATH" ]; then
               APP_PATH="$APP_PATH_DEFAULT"
             fi
 
             echo "Deploy path: $APP_PATH"
+            echo "Target ref: $TARGET_REF"
             cd "$APP_PATH"
 
-            git fetch --all --prune
-            git checkout main
-            git pull --ff-only origin main
+            git fetch --all --prune --tags
+            if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_REF"; then
+              git checkout "$TARGET_REF"
+              git pull --ff-only origin "$TARGET_REF"
+            elif git show-ref --verify --quiet "refs/tags/$TARGET_REF"; then
+              git checkout "tags/$TARGET_REF"
+            else
+              echo "Ref '$TARGET_REF' does not exist on origin or tags."
+              exit 1
+            fi
 
             # Preflight dependencies
             if command -v redis-cli >/dev/null 2>&1; then
@@ -47,7 +72,12 @@ jobs:
             cd "$APP_PATH/apps/api"
             source venv/bin/activate
             pip install -r requirements.txt
-            venv/bin/alembic upgrade head
+
+            if [ "$RUN_MIGRATIONS" = "true" ]; then
+              venv/bin/alembic upgrade head
+            else
+              echo "Skip migrations by input flag"
+            fi
 
             pm2 restart widget-api --update-env || \
               pm2 start "$APP_PATH/apps/api/venv/bin/python" --name widget-api -- -m uvicorn main:app --host 127.0.0.1 --port 8000

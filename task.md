@@ -1,6 +1,19 @@
 # Task list — Sprint hiện tại
 
-> Cập nhật: 2026-04-03
+> Cập nhật: 2026-04-08
+
+## CI/CD — Chuẩn hóa pipeline monorepo (hoàn thành)
+
+Chi tiết kế hoạch: `implementation_plan.md` (mục 6)
+
+- [x] Thiết kế kiến trúc CI/CD và được user duyệt.
+- [x] Chuẩn hóa `ci.yml` (concurrency, lint/build/test rõ ràng cho API/Web/Widget).
+- [x] Chuẩn hóa `deploy.yml` (release tag + metadata + gate CI).
+- [x] Chuẩn hóa `deploy-vps.yml` (manual deploy có input ref, kiểm tra health).
+- [x] Cập nhật tài liệu vận hành CI/CD.
+- [x] Chạy test xác nhận sau khi sửa và báo cáo pass/fail.
+
+---
 
 ## Billing — định nghĩa gói dịch vụ (**xong backend cốt lõi**)
 

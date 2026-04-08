@@ -85,7 +85,9 @@ cd apps/widget-sdk
 npm install
 npm run dev
 ```
+
 ### 4. code tạo super user
+
 ```bash
 .\.venv\Scripts\python.exe scripts\create_platform_admin.py --email admin123@gmail.com --password '12345678'
 Đã tạo platform admin: admin123@gmail.com (id=1f71c460-ccca-4d58-8d41-45912e403e8a)
@@ -106,3 +108,46 @@ npm run dev
 ---
 
 _Dự án đang trong quá trình phát triển tích cực._
+
+---
+
+## CI/CD (GitHub Actions)
+
+### Workflow hiện có
+
+- `.github/workflows/ci.yml`
+  - Trigger: `push` (`main`, `develop`), `pull_request` (`main`, `develop`), `workflow_dispatch`.
+  - Chạy: backend lint (`ruff`), backend test (`pytest` + Postgres/Redis/Qdrant), web lint + build, widget build.
+- `.github/workflows/deploy.yml`
+  - Trigger: push tag `v*` hoặc chạy tay (`workflow_dispatch`).
+  - Chức năng: kiểm tra commit đã pass CI, build/push Docker image API + Web lên GHCR.
+- `.github/workflows/deploy-vps.yml`
+  - Trigger: chạy tay (`workflow_dispatch`).
+  - Chức năng: deploy branch/tag lên VPS qua SSH, tùy chọn chạy migration, restart PM2, health check.
+
+### Secrets cần cấu hình trên GitHub
+
+- `APP_ENCRYPTION_KEY`
+- `GEMINI_API_KEY`
+- `PROD_API_URL`
+- `VPS_HOST`
+- `VPS_PORT`
+- `VPS_USER`
+- `VPS_SSH_KEY`
+- `VPS_APP_PATH`
+
+Khuyến nghị tạo GitHub Environment `production` để bảo vệ deploy và quản lý secret theo môi trường.
+
+### Quy trình release gợi ý
+
+1. Merge code vào `main` và chờ CI xanh.
+2. Tạo tag release: `vX.Y.Z`.
+3. Push tag để chạy workflow build/push image.
+4. Chạy tay workflow deploy VPS với `git_ref` là tag vừa tạo.
+5. Theo dõi health check và PM2 process sau deploy.
+
+### Rollback nhanh
+
+1. Chạy lại workflow deploy VPS.
+2. Nhập `git_ref` là tag stable trước đó.
+3. Giữ `run_migrations=false` nếu rollback ứng dụng nhưng không rollback schema.
