@@ -789,7 +789,16 @@ async def get_analytics_history(
     tenant_uuid = UUID(request.state.tenant_id)
     async with async_session() as session:
         series = await fetch_message_history_series(session, tenant_uuid, days)
-    return {"days": days, "series": series}
+    return {
+        "days": days,
+        "series": series,
+        "kpi_contract": {
+            "timezone": "UTC",
+            "bucket": "day",
+            "metric": "user_messages",
+            "source": "chat_messages(role=user)",
+        },
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

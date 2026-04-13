@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
@@ -28,6 +29,20 @@ class TenantUpdateBody(BaseModel):
 
 class ImpersonateBody(BaseModel):
     tenant_id: UUID
+
+
+def _audit_log(request: Request, action: str, target_tenant_id: Optional[str], **extra: Any) -> None:
+    logger.info(
+        "platform_admin_audit",
+        extra={
+            "action": action,
+            "actor": str(getattr(request.state, "tenant_id", "")),
+            "target_tenant_id": target_tenant_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "request_id": request.headers.get("X-Request-ID", ""),
+            **extra,
+        },
+    )
 
 
 def _celery_ping() -> dict[str, Any]:
@@ -184,7 +199,7 @@ async def list_customers(
 
 
 @router.patch("/tenants/{tenant_id}")
-async def update_tenant(tenant_id: UUID, body: TenantUpdateBody):
+async def update_tenant(tenant_id: UUID, body: TenantUpdateBody, request: Request):
     """Cập nhật trạng thái hoặc gói cước của tenant."""
     async with async_session() as session:
         res = await session.execute(
@@ -210,6 +225,12 @@ async def update_tenant(tenant_id: UUID, body: TenantUpdateBody):
         "platform_admin_tenant_update",
         extra={"tenant_id": str(tenant_id), **update_data},
     )
+    _audit_log(
+        request,
+        action="tenant_update",
+        target_tenant_id=str(tenant_id),
+        update_data=update_data,
+    )
     return {"id": str(tenant_id), **update_data}
 
 
@@ -232,6 +253,8 @@ async def impersonate_tenant(payload: ImpersonateBody, request: Request):
         target.email or "",
         role="tenant",
         impersonator_sub=str(admin_id),
+        expires_in_minutes=int(settings.PLATFORM_IMPERSONATE_TOKEN_EXPIRE_MINUTES),
+        scope="tenant_impersonation",
     )
     logger.info(
         "impersonate_issued",
@@ -240,10 +263,16 @@ async def impersonate_tenant(payload: ImpersonateBody, request: Request):
             "target_tenant_id": str(target.id),
         },
     )
+    _audit_log(
+        request,
+        action="impersonate_issued",
+        target_tenant_id=str(target.id),
+        token_ttl_minutes=int(settings.PLATFORM_IMPERSONATE_TOKEN_EXPIRE_MINUTES),
+    )
     return {
         "access_token": token,
         "token_type": "bearer",
-        "expires_in_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        "expires_in_minutes": int(settings.PLATFORM_IMPERSONATE_TOKEN_EXPIRE_MINUTES),
         "tenant": {
             "id": str(target.id),
             "name": target.name,

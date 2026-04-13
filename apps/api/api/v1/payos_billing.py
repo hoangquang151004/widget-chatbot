@@ -6,6 +6,7 @@ import logging
 import random
 import time
 from datetime import datetime
+from types import SimpleNamespace
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -48,6 +49,18 @@ def _generate_order_code() -> int:
     """Số nguyên duy nhất cho PayOS (thử vài lần nếu trùng)."""
     base = int(time.time() * 1000) % 10**10
     return base * 10000 + random.randint(0, 9999)
+
+
+def _normalize_webhook_code(payload_code: str | None) -> str:
+    return (payload_code or "").strip()
+
+
+def _status_from_webhook_code(code: str) -> str:
+    if code == "00":
+        return "completed"
+    if code in {"03", "09", "CANCELLED", "CANCELED"}:
+        return "cancelled"
+    return "failed"
 
 
 class PayosConfigResponse(BaseModel):
@@ -219,25 +232,36 @@ async def payos_webhook(request: Request) -> dict:
         logger.exception("PayOS webhook error: %s", e)
         raise HTTPException(status_code=400, detail="Webhook không hợp lệ") from e
 
-    if body.get("code") != "00":
-        logger.info("PayOS webhook non-success code=%s", body.get("code"))
-        return {"success": True}
+    code = _normalize_webhook_code(body.get("code"))
+    event_status = _status_from_webhook_code(code)
 
-    order_code = int(data.order_code)
-    amount = int(data.amount)
+    # SDK có thể trả object dataclass/pydantic khác nhau theo version
+    payload_obj = data if data is not None else SimpleNamespace()
+    order_code = int(getattr(payload_obj, "order_code", 0) or 0)
+    amount = int(getattr(payload_obj, "amount", 0) or 0)
+    if order_code <= 0:
+        logger.warning("PayOS webhook missing order_code | code=%s", code)
+        return {"success": True}
 
     async with async_session() as session:
         result = await session.execute(
             select(PayosPaymentIntent).where(
                 PayosPaymentIntent.order_code == order_code
-            )
+            ).with_for_update()
         )
         intent = result.scalar_one_or_none()
         if not intent:
             logger.error("PayOS webhook: unknown order_code=%s", order_code)
             return {"success": True}
 
-        if intent.status == "completed":
+        # Replay-safe: terminal state rồi thì bỏ qua callback trùng/retry
+        if intent.status in {"completed", "cancelled", "failed", "amount_mismatch"}:
+            logger.info(
+                "PayOS webhook replay ignored order=%s current_status=%s incoming_status=%s",
+                order_code,
+                intent.status,
+                event_status,
+            )
             return {"success": True}
 
         if amount != intent.amount_vnd:
@@ -247,7 +271,20 @@ async def payos_webhook(request: Request) -> dict:
                 intent.amount_vnd,
                 amount,
             )
+            intent.status = "amount_mismatch"
+            await session.commit()
             raise HTTPException(status_code=400, detail="Số tiền không khớp")
+
+        if event_status != "completed":
+            intent.status = event_status
+            await session.commit()
+            logger.info(
+                "PayOS webhook non-success order=%s mapped_status=%s code=%s",
+                order_code,
+                event_status,
+                code,
+            )
+            return {"success": True}
 
         tenant = await session.get(Tenant, intent.tenant_id)
         if tenant:

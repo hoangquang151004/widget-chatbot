@@ -4,6 +4,7 @@
  */
 
 import { Widget } from './widget.js';
+import { resolveLocale } from './i18n.js';
 
 (function () {
   // Tìm script tag hiện tại (ưu tiên thẻ có data-public-key)
@@ -30,6 +31,12 @@ import { Widget } from './widget.js';
     avatarUrl:   script.getAttribute('data-avatar')       || '',
     fontSize:    script.getAttribute('data-font-size')    || '14px',
     showLogo:    script.getAttribute('data-show-logo') !== 'false', // default: true
+    locale:      resolveLocale(
+      script.getAttribute('data-locale') ||
+      (navigator.languages && navigator.languages[0]) ||
+      navigator.language ||
+      'vi'
+    ),
   };
 
   console.log('[XenoAI Widget] Đang khởi tạo với Public Key:', config.publicKey.substring(0, 12) + '...');

@@ -8,6 +8,7 @@ import { Messages } from './ui/messages.js';
 import { sendMessage, streamMessage } from './api/client.js';
 import { getSessionId, clearSession } from './storage/session.js';
 import widgetCss from './styles/widget.css?inline';
+import { t } from './i18n.js';
 
 export class Widget {
   constructor(config, shadow) {
@@ -26,6 +27,7 @@ export class Widget {
 
     // Expose shadow reference for bar chart canvas queries
     document._xenoWidgetShadow = shadow;
+    document._xenoWidgetLocale = config.locale || 'vi';
 
     // Init UI
     this._bubble = new Bubble(shadow, config.color, () => this.toggle());
@@ -92,8 +94,8 @@ export class Widget {
       this._messages.hideTyping();
       this._messages.endStream();
       const msg = err.name === 'AbortError'
-        ? 'Timeout — vui lòng thử lại.'
-        : (err.message || 'Không thể kết nối tới server.');
+        ? t(this._config.locale, 'timeoutMessage')
+        : (err.message || t(this._config.locale, 'connectError'));
       this._messages.appendError(msg);
     } finally {
       this._isStreaming = false;

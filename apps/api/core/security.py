@@ -51,6 +51,8 @@ class SecurityUtils:
         role: str = "tenant",
         *,
         impersonator_sub: Optional[str] = None,
+        expires_in_minutes: Optional[int] = None,
+        scope: Optional[str] = None,
     ) -> str:
         """Generate a signed bearer token for admin dashboard sessions.
 
@@ -62,10 +64,14 @@ class SecurityUtils:
             "email": email,
             "role": role,
             "type": "admin",
-            "exp": int(time.time()) + int(settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
+            "exp": int(time.time()) + int(
+                (expires_in_minutes if expires_in_minutes is not None else settings.ACCESS_TOKEN_EXPIRE_MINUTES) * 60
+            ),
         }
         if impersonator_sub:
             payload["impersonator_sub"] = impersonator_sub
+        if scope:
+            payload["scope"] = scope
 
         header_b64 = cls._b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
         payload_b64 = cls._b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))

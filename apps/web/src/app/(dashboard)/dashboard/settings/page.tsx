@@ -199,7 +199,7 @@ export default function SettingsPage() {
                     <button
                       onClick={() => {
                         const code = `<script
-  src="${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}/widget.js"
+  src="${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}/sdk/widget.js"
   data-public-key="${tenant?.public_key || "pk_live_..."}"
   data-api-url="${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}"
   data-bot-name="${formData.name}"
@@ -234,7 +234,7 @@ export default function SettingsPage() {
                       </p>
                       <p className="pl-6">
                         <span className="text-indigo-400">src</span>=
-                        <span className="text-emerald-400">{`"${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}/widget.js"`}</span>
+                        <span className="text-emerald-400">{`"${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}/sdk/widget.js"`}</span>
                       </p>
                       <p className="pl-6">
                         <span className="text-indigo-400">data-public-key</span>

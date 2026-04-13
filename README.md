@@ -86,6 +86,8 @@ npm install
 npm run dev
 ```
 
+Gợi ý i18n widget: có thể cấu hình `data-locale="vi"` hoặc `data-locale="en"` trên script nhúng; nếu không set, widget tự động fallback theo `navigator.language` rồi về `vi`.
+
 ### 4. code tạo super user
 
 ```bash
@@ -124,7 +126,7 @@ _Dự án đang trong quá trình phát triển tích cực._
   - Chức năng: kiểm tra commit của tag đã pass CI, build/push Docker image API + Web lên GHCR, ghi digest + commit SHA vào summary.
 - `.github/workflows/deploy-vps.yml`
   - Trigger: chạy tay (`workflow_dispatch`).
-  - Chức năng: deploy branch/tag lên VPS qua SSH, tùy chọn chạy migration, restart PM2, health check.
+  - Chức năng: deploy branch/tag lên VPS qua SSH, có gate kiểm tra CI pass trước deploy, tùy chọn chạy migration + migration safety gate (đảm bảo `alembic current == head`), restart PM2, health check.
 
 Lưu ý hiện tại: push vào `main` **chưa tự động deploy VPS**. Release production cần chạy workflow deploy VPS thủ công.
 

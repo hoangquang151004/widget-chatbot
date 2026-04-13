@@ -58,6 +58,7 @@ Nginx thêm header tương thích (và `X-Frame-Options`/`SAMEORIGIN` cho UI). *
 - CI: `.github/workflows/ci.yml` chạy tự động khi push/PR (`main`, `develop`).
 - Build image: `.github/workflows/deploy.yml` chạy khi push tag `v*` hoặc chạy tay.
 - Deploy VPS: `.github/workflows/deploy-vps.yml` đang chạy **thủ công** (`workflow_dispatch`).
+  - Từ TASK-05: workflow có thêm gate kiểm tra CI pass cho `git_ref` trước khi SSH deploy.
 
 ### Luồng release production khuyến nghị
 
@@ -68,6 +69,56 @@ Nginx thêm header tương thích (và `X-Frame-Options`/`SAMEORIGIN` cho UI). *
    - `git_ref = vX.Y.Z`
    - `run_migrations = true` (nếu release có migration)
 5. Kiểm tra health endpoint và trạng thái PM2.
+
+## Alerting & Observability (TASK-05)
+
+### Mức độ cảnh báo
+
+- `critical`: API down, DB connection fail, webhook lỗi xác thực hàng loạt.
+- `high`: lỗi AI pipeline tăng đột biến, worker queue backlog vượt ngưỡng.
+- `medium`: lỗi rải rác theo endpoint, retry tăng bất thường.
+
+### Kênh cảnh báo
+
+- Sentry Issues + Alerts (backend bắt buộc, web khuyến nghị).
+- Kênh nhận alert: email on-call hoặc Slack/Teams webhook của đội vận hành.
+
+### Rule gợi ý
+
+- `critical`: >5 lỗi/5 phút cùng fingerprint `api.v1.payos_billing` hoặc `db.session`.
+- `high`: tỷ lệ lỗi endpoint `/api/v1/chat` > 3% trong 10 phút.
+- `medium`: tăng warning liên tục 30 phút cho cùng service.
+
+### Kiểm tra sau deploy
+
+1. `GET /api/health` trả `200`.
+2. `GET /api/health/detailed` không degraded kéo dài.
+3. Tạo 1 request webhook test (staging/sandbox) và kiểm tra không phát sinh error mới trên Sentry.
+
+## Rollback Drill Checklist (TASK-05)
+
+### Mục tiêu
+
+- Thực hành rollback có kiểm soát để giảm MTTR khi release lỗi.
+
+### Checklist diễn tập
+
+1. Chạy deploy tới release mới bằng tag `vX.Y.Z`.
+2. Xác nhận lỗi giả lập (hoặc scenario định trước) đủ điều kiện rollback.
+3. Chạy lại workflow deploy VPS với `git_ref` là tag stable trước đó.
+4. `run_migrations=false` nếu rollback chỉ ở tầng app code.
+5. Xác nhận health checks + PM2 `online`.
+6. Ghi biên bản: thời điểm detect lỗi, thời điểm bắt đầu rollback, thời điểm recovery.
+
+### Biên bản tối thiểu
+
+- `incident_id`
+- `trigger`
+- `owner`
+- `mttd_seconds`
+- `mttr_seconds`
+- `root_cause_summary`
+- `follow_up_actions`
 
 ### Luồng rollback nhanh
 

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Date, cast, func, or_, select
+from sqlalchemy import Date, case, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -142,10 +142,45 @@ async def fetch_analytics_stats(session: AsyncSession, tenant_uuid: UUID) -> dic
         or 0
     )
 
+    normalized_intent = case(
+        (func.upper(ChatMessage.intent) == "RAG", "RAG"),
+        (func.upper(ChatMessage.intent) == "SQL", "SQL"),
+        (func.upper(ChatMessage.intent) == "GENERAL", "GENERAL"),
+        else_="GENERAL",
+    )
+    top_intent_rows = (
+        await session.execute(
+            select(
+                normalized_intent.label("intent"),
+                func.count(ChatMessage.id).label("count"),
+            )
+            .where(
+                ChatMessage.tenant_id == tenant_uuid,
+                ChatMessage.role == "assistant",
+            )
+            .group_by(normalized_intent)
+            .order_by(func.count(ChatMessage.id).desc())
+            .limit(5)
+        )
+    ).all()
+    top_intents: list[dict[str, Any]] = []
+    for row in top_intent_rows:
+        label = (row.intent or "GENERAL").strip().upper()
+        if label not in ("RAG", "SQL", "GENERAL"):
+            label = "GENERAL"
+        top_intents.append({"intent": label, "count": int(row.count or 0)})
+
     return {
         "total_user_messages": total_user,
         "document_count": document_count,
         "total_tokens_estimated": total_tokens,
+        "top_intents": top_intents,
+        "kpi_contract": {
+            "timezone": "UTC",
+            "user_message_source": "chat_messages(role=user)",
+            "token_source": "chat_messages(role=assistant).token_count",
+            "intent_source": "chat_messages(role=assistant).intent",
+        },
         "reply_breakdown": {
             "rag": rag_replies,
             "sql": sql_replies,

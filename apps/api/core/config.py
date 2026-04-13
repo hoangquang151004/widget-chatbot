@@ -29,6 +29,7 @@ class Settings(BaseSettings):
         description="32-byte base64 key for AES-256-GCM encryption of tenant DB credentials"
     )
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
+    PLATFORM_IMPERSONATE_TOKEN_EXPIRE_MINUTES: int = 30
 
     # ── Database (PostgreSQL) ─────────────────────────────────────────────────
     POSTGRES_SERVER: str = "localhost"

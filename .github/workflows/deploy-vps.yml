@@ -22,10 +22,76 @@ env:
   APP_PATH_DEFAULT: /var/www/widget.xenoai.vn
 
 jobs:
+  verify-ci:
+    name: Verify CI Before Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      target_sha: ${{ steps.resolve.outputs.target_sha }}
+    steps:
+      - name: Resolve target ref and ensure CI is green
+        id: resolve
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const targetRef = '${{ github.event.inputs.git_ref }}';
+            let targetSha = '';
+
+            try {
+              const branch = await github.rest.repos.getBranch({
+                owner,
+                repo,
+                branch: targetRef,
+              });
+              targetSha = branch.data.commit.sha;
+            } catch (_) {
+              // not a branch, continue resolving as tag
+            }
+
+            if (!targetSha) {
+              const tagRef = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `tags/${targetRef}`,
+              });
+              targetSha = tagRef.data.object.sha;
+              if (tagRef.data.object.type === 'tag') {
+                const annotatedTag = await github.rest.git.getTag({
+                  owner,
+                  repo,
+                  tag_sha: targetSha,
+                });
+                targetSha = annotatedTag.data.object.sha;
+              }
+            }
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner,
+              repo,
+              status: 'completed',
+              head_sha: targetSha,
+              per_page: 100,
+            });
+            const ciRun = runs.find((run) => run.name === 'CI — Lint, Test, Build');
+            if (!ciRun) {
+              core.setFailed(`Không tìm thấy CI run cho commit ${targetSha}.`);
+              return;
+            }
+            if (ciRun.conclusion !== 'success') {
+              core.setFailed(`CI chưa pass cho commit ${targetSha}. Conclusion=${ciRun.conclusion}`);
+              return;
+            }
+            core.setOutput('target_sha', targetSha);
+            core.info(`CI passed for ${targetSha}`);
+
   deploy:
     name: Deploy To VPS
     runs-on: ubuntu-latest
     environment: production
+    needs: verify-ci
 
     steps:
       - name: Validate SSH credentials and required secrets
@@ -161,6 +227,25 @@ jobs:
 
             if [ "$RUN_MIGRATIONS" = "true" ]; then
               venv/bin/alembic upgrade head
+              # Migration safety gate: current revision phải khớp head sau upgrade
+              python - <<'PY'
+              import subprocess
+              import re
+
+              head_out = subprocess.check_output(
+                  ["venv/bin/alembic", "heads"], text=True
+              ).strip()
+              current_out = subprocess.check_output(
+                  ["venv/bin/alembic", "current"], text=True
+              ).strip()
+              head_rev = re.findall(r"[0-9a-f]{10,}", head_out)
+              cur_rev = re.findall(r"[0-9a-f]{10,}", current_out)
+              if not head_rev or not cur_rev:
+                  raise SystemExit(f"Unable to parse alembic revisions. heads={head_out!r}, current={current_out!r}")
+              if head_rev[0] != cur_rev[0]:
+                  raise SystemExit(f"Migration gate failed: current={cur_rev[0]} != head={head_rev[0]}")
+              print(f"Migration gate passed: {cur_rev[0]}")
+              PY
             else
               echo "Skip migrations by input flag"
             fi

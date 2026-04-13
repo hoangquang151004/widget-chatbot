@@ -1,6 +1,7 @@
 /**
  * W-006: Message rendering + Markdown + Rich Components
  */
+import { t } from '../i18n.js';
 
 /* ── Mini Markdown Parser ───────────────────────────────── */
 function parseMarkdown(text) {
@@ -100,7 +101,8 @@ function renderCitations(citations) {
     const url = c.metadata?.url || '#';
     return `<a href="${url}" class="w-citation" target="_blank" title="${title}">[${i + 1}]</a>`;
   }).join(' ');
-  return `<div class="w-component w-citations-wrap"><span class="w-citations-label">Tham khảo:</span> ${links}</div>`;
+  const locale = document._xenoWidgetLocale || 'vi';
+  return `<div class="w-component w-citations-wrap"><span class="w-citations-label">${t(locale, 'references')}</span> ${links}</div>`;
 }
 
 function renderComponent(component) {
@@ -146,7 +148,7 @@ export class Messages {
   appendResetButton(onReset) {
     const btn = document.createElement('button');
     btn.className = 'w-reset-btn';
-    btn.textContent = '↺ Xóa cuộc trò chuyện';
+    btn.textContent = t(this._config.locale, 'resetConversation');
     btn.addEventListener('click', onReset);
     this._container.appendChild(btn);
   }
